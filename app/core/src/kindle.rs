@@ -43,18 +43,6 @@ pub fn find() -> Option<Kindle> {
     platform::find()
 }
 
-/// Up-to-date free space (call after copies).
-pub fn refresh(k: &Kindle) -> Option<Kindle> {
-    if std::env::var_os("LISEUSE_FAKE_KINDLE").is_some() {
-        return fake_kindle(&k.root);
-    }
-    platform::space(&k.root).map(|(total, free)| Kindle {
-        total_bytes: total,
-        free_bytes: free,
-        ..k.clone()
-    })
-}
-
 fn dir_size(p: &Path) -> u64 {
     let Ok(rd) = std::fs::read_dir(p) else {
         return 0;
@@ -201,9 +189,6 @@ mod platform {
     use std::path::Path;
 
     pub fn find() -> Option<Kindle> {
-        None
-    }
-    pub fn space(_root: &Path) -> Option<(u64, u64)> {
         None
     }
     pub fn eject(_root: &Path) -> Result<(), String> {

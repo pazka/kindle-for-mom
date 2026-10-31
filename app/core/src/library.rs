@@ -615,6 +615,9 @@ impl Library {
     }
 
     /// Put a book from the PC onto the Kindle (with its saved reading position).
+    /// `k` must be fresh (the shell calls `kindle::find()` just before), so its
+    /// `free_bytes` is the space left right now; tests pass a Kindle with a
+    /// chosen free space.
     pub fn put_on_kindle(&self, id: &str, k: &Kindle) -> Result<(), OpError> {
         let book = self
             .pc_books()
@@ -642,9 +645,7 @@ impl Library {
         let dst = docs.join(&book.kindle_name);
         let already = fs::metadata(&dst).map(|m| m.len()).unwrap_or(0);
         let needed = book.kindle_size.saturating_sub(already) + KINDLE_MARGIN;
-        let free = crate::kindle::refresh(k)
-            .map(|k| k.free_bytes)
-            .unwrap_or(k.free_bytes);
+        let free = k.free_bytes;
         if needed > free {
             return Err(OpError {
                 code: "no_space",
