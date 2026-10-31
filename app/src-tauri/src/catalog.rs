@@ -174,10 +174,16 @@ mod live {
             assert!(!home.suggestions.is_empty(), "author ideas");
             let found = page(None, Some("hugo".into())).await.expect("search");
             assert!(!found.books.is_empty(), "results for hugo");
-            let book = found.books.iter().find(|b| b.download.is_some()).expect("a downloadable book");
+            let book = found
+                .books
+                .iter()
+                .find(|b| b.download.is_some())
+                .expect("a downloadable book");
             let d = book.download.as_ref().unwrap();
             let to = std::env::temp_dir().join(format!("live-book.{}", d.format.ext()));
-            download(&d.url, d.format, &to, 300 * 1024 * 1024).await.expect("download");
+            download(&d.url, d.format, &to, 300 * 1024 * 1024)
+                .await
+                .expect("download");
             assert!(std::fs::metadata(&to).unwrap().len() > 1000);
             let _ = std::fs::remove_file(&to);
             if let Some(next) = &found.next {
