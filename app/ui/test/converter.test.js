@@ -55,3 +55,17 @@ test("unknown converter errors are stored as 'convert'", async () => {
   await conv.enqueue(["b"]);
   assert.deepEqual(api.calls.at(-1), ["error", "b", "convert"]);
 });
+
+test("the author written inside the book comes from the core's rule (Nom, Prénom)", async () => {
+  const api = { ...fakeApi(), sortAuthor: async (a) => (a === "Victor Hugo" ? "Hugo, Victor" : a) };
+  let written;
+  const conv = new Converter({
+    api,
+    convert: async (_bytes, opts) => {
+      written = await opts.sortAuthor("Victor Hugo");
+      return { mobi: new Uint8Array([9]), meta: { title: "Notre-Dame de Paris", creators: ["Victor Hugo"] }, warnings: [] };
+    },
+  });
+  await conv.enqueue(["pg2610"]);
+  assert.equal(written, "Hugo, Victor");
+});

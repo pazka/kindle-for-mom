@@ -47,6 +47,9 @@ none of these books.
 ## Consequences
 - Rolling back to v0.1 loses nothing: books in author folders are still
   files on disk; v0.1 just doesn't list them.
-- Writing "Nom, Prénom" into the MOBI files the converter makes (the Kindle
-  sorts by that field, so a new book by "Victor Hugo" currently sorts under
-  V) and duplicate detection are follow-ups.
+- Converted books carry one author written "Nom, Prénom" inside the file
+  (EXTH 100), because the Kindle sorts by that field. The converter takes the
+  rule as an option (`sortAuthor`); the app passes the core's
+  `authors::author_sort`, so the alias table lives in one place.
+- Rewriting the author inside existing files is not needed: the sort already
+  did it for her current books. Duplicate detection is a follow-up.

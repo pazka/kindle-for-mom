@@ -11,6 +11,7 @@ const KNOWN_ERRORS = new Set(["drm", "not_epub", "empty"]);
 export class Converter {
   /**
    * @param {{ api: object, convert: Function, processImage?: Function, onDone?: Function }} deps
+   * The author written inside the book comes from `api.sortAuthor` ("Nom, Prénom").
    */
   constructor({ api, convert, processImage, onDone }) {
     this.api = api;
@@ -51,7 +52,8 @@ export class Converter {
     const bytes = await this.api.readBook(id);
     let out;
     try {
-      out = await this.convert(bytes, { processImage: this.processImage });
+      const sortAuthor = this.api.sortAuthor ? (a) => this.api.sortAuthor(a) : undefined;
+      out = await this.convert(bytes, { processImage: this.processImage, sortAuthor });
     } catch (e) {
       const code = KNOWN_ERRORS.has(e?.code) ? e.code : "convert";
       await this.api.saveConversionError(id, code);

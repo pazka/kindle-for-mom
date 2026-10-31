@@ -6,7 +6,7 @@ All notable changes to Ma liseuse. Format: [Keep a Changelog](https://keepachang
 
 ### Added
 - Works with the Kindle as it was sorted on 2026-10-31: books in author folders ("Nom, Prénom") are listed with their real title, sorted by author; notes ("Mes extraits"), dictionaries and screenshots are left alone; nothing already on the Kindle is ever moved or renamed, so collections keep working.
-- New books go into the author's folder on the Kindle (her existing folder when there is one) and on the PC.
+- New books go into the author's folder on the Kindle (her existing folder when there is one) and on the PC; converted books carry their author as "Nom, Prénom" so the Kindle's sort by author files them with the others.
 - Reading positions of the Kindle 4 (`.mbp`, `.apnx`… files) leave and come back with each book; a book comes back to exactly where it was.
 - "Tout sauvegarder sur l'ordinateur": copies every book that is only on the Kindle to the PC, without changing the Kindle.
 - Library in `Documents\Mes livres` (plain files, one folder per author, EPUB kept as the master copy).

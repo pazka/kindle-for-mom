@@ -38,7 +38,11 @@ const LABELS = {
 
 /**
  * @param {Uint8Array} bytes the .epub file
- * @param {{ processImage?: Function, onProgress?: (done:number, total:number) => void, now?: number, uid?: number }} [opts]
+ * `sortAuthor` (optional) turns the EPUB's first author into the form
+ * written inside the MOBI: the Kindle sorts by that field, so the app passes
+ * one that gives "Nom, Prénom" (one author only, like the rest of her Kindle).
+ * The returned `meta` keeps the EPUB's own names.
+ * @param {{ processImage?: Function, sortAuthor?: (name: string) => string | Promise<string>, onProgress?: (done:number, total:number) => void, now?: number, uid?: number }} [opts]
  * @returns {Promise<{ mobi: Uint8Array, meta: object, warnings: string[], stats: object }>}
  */
 export async function convertEpub(bytes, opts = {}) {
@@ -139,7 +143,12 @@ export async function convertEpub(bytes, opts = {}) {
   if (broken) warnings.push(`${broken} internal link(s) point nowhere and were disabled`);
   if (droppedImages) warnings.push(`${droppedImages} image(s) could not be converted and were left out`);
 
-  const mobi = writeMobi({ text, images, meta, coverIndex, now: opts.now, uid: opts.uid });
+  let mobiMeta = meta;
+  if (opts.sortAuthor && meta.creators?.length) {
+    const sorted = String((await opts.sortAuthor(meta.creators[0])) || "").trim();
+    if (sorted) mobiMeta = { ...meta, creators: [sorted] };
+  }
+  const mobi = writeMobi({ text, images, meta: mobiMeta, coverIndex, now: opts.now, uid: opts.uid });
   // self-check: the file must read back to exactly the text we wrote
   const back = readMobi(mobi);
   if (back.text.length !== text.length || back.images.length !== images.length) {

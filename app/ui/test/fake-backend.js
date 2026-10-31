@@ -180,6 +180,7 @@
     get_ui_state: () => fake.state.ui,
     set_ui_state: ({ ui }) => { fake.state.ui = ui; return null; },
     open_library: () => null,
+    sort_author: ({ name }) => (name.includes(",") ? name : name.replace(/^(.*) (\S+)$/, "$2, $1")),
     share_book: ({ id }) => { if (!fake.state.pc.some((b) => b.id === id)) throw err("missing", "Ce livre n'est plus là."); fake.shared = id; return null; },
   };
 

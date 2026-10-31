@@ -121,6 +121,13 @@ async fn take_from_kindle(app: State<'_, App>, file: String) -> Res<String> {
     app.lib.take_from_kindle(&file, &k)
 }
 
+/// "Prénom Nom" → "Nom, Prénom" (with the alias table), written inside
+/// converted books because the Kindle sorts by it.
+#[tauri::command]
+async fn sort_author(name: String) -> Res<String> {
+    Ok(liseuse_core::authors::author_sort(&name))
+}
+
 #[tauri::command]
 async fn save_to_pc(app: State<'_, App>, file: String) -> Res<String> {
     let k = current_kindle(&app)?;
@@ -299,6 +306,7 @@ fn main() {
             put_on_kindle,
             take_from_kindle,
             save_to_pc,
+            sort_author,
             eject,
             add_path,
             add_bytes,

@@ -37,6 +37,11 @@ test("converts an EPUB 3 into a readable MOBI 6", async () => {
   const dec = (k) => back.exth.get(k)?.map((b) => new TextDecoder().decode(b));
   assert.deepEqual(dec(100), ["Émile Auteur"]);
   assert.deepEqual(dec(524), ["fr"]);
+
+  // with the app's author rule: one "Nom, Prénom" record, the EPUB names kept in meta
+  const sorted = await convertEpub(sampleEpub(), { now: 1_700_000_000, uid: 42, sortAuthor: async (a) => `${a.split(" ").pop()}, ${a.split(" ")[0]}` });
+  assert.deepEqual(readMobi(sorted.mobi).exth.get(100).map((b) => new TextDecoder().decode(b)), ["Auteur, Émile"]);
+  assert.equal(sorted.meta.creators[0], "Émile Auteur");
   assert.deepEqual(dec(104), ["9782070360024"]);
   assert.equal(dec(103)[0], "Un résumé.");
   assert.ok(back.exth.has(201), "cover offset record");

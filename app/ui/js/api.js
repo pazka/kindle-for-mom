@@ -21,6 +21,7 @@ export const api = {
   saveKindleCopy: (id, mobi) => invoke("save_kindle_copy", mobi, { headers: { "x-id": enc(id) } }),
   saveConversionError: (id, code) => invoke("save_conversion_error", { id, code }),
   renameBook: (id, name) => invoke("rename_book", { id, name }),
+  sortAuthor: (name) => invoke("sort_author", { name }),
   deleteBook: (id) => invoke("delete_book", { id }),
   restoreBook: (trashId) => invoke("restore_book", { trashId }),
   newDownloads: () => invoke("new_downloads"),
