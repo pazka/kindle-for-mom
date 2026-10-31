@@ -1,0 +1,42 @@
+# Merge Dependabot's minor/patch updates once the "app" workflow (Rust core,
+# UI + converter + end-to-end journeys, Windows tests + installer) passed on
+# the PR. Major updates stay open for a review. No third-party action: only
+# the GitHub API through the preinstalled gh CLI.
+name: dependabot-merge
+
+on:
+  workflow_run:
+    workflows: [app]
+    types: [completed]
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  merge:
+    if: >-
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.event == 'pull_request' &&
+      github.event.workflow_run.actor.login == 'dependabot[bot]' &&
+      github.event.workflow_run.head_repository.full_name == github.repository
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Merge if it is a tested minor or patch update
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          BRANCH: ${{ github.event.workflow_run.head_branch }}
+          SHA: ${{ github.event.workflow_run.head_sha }}
+        run: |
+          set -euo pipefail
+          pr=$(gh api "repos/$REPO/pulls?state=open&head=${REPO%%/*}:$BRANCH" -q '.[0].number // empty')
+          [ -n "$pr" ] || { echo "no open PR for $BRANCH"; exit 0; }
+          read -r author head title < <(gh api "repos/$REPO/pulls/$pr" -q '[.user.login, .head.sha, .title] | @tsv')
+          [ "$author" = "dependabot[bot]" ] || { echo "not a Dependabot PR"; exit 0; }
+          [ "$head" = "$SHA" ] || { echo "PR moved on since this run; its own run decides"; exit 0; }
+          # "Bump x from 1.2.3 to 2.0.0": a new major version waits for a review
+          if [[ "$title" =~ from\ v?([0-9]+)[^\ ]*\ to\ v?([0-9]+) ]] && [ "${BASH_REMATCH[1]}" != "${BASH_REMATCH[2]}" ]; then
+            echo "major update: left for review"; exit 0
+          fi
+          gh api -X PUT "repos/$REPO/pulls/$pr/merge" -f merge_method=squash -f sha="$SHA"

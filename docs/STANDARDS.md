@@ -70,6 +70,7 @@ Rules:
 ## 6. Dependencies and supply chain
 
 - New third-party dependency only with the owner's yes. Today: `tauri`, `tauri-build`, `serde`, `serde_json`, `windows-sys` (Rust); `@tauri-apps/cli`, `playwright` (dev only, JS). The converter has none.
+- Libraries are kept up to date for security: Dependabot (`.github/dependabot.yml`) proposes updates 7 days after a release; minor and patch updates are merged automatically once every check above is green (`dependabot-merge.yml`); major updates and GitHub Actions updates get a review first.
 - Exact versions, lockfiles committed (`Cargo.lock`, `package-lock.json`), `--locked` / `npm ci --ignore-scripts` everywhere, chosen releases at least 7 days old.
 - No secrets in the repo (it is public). No telemetry without the owner's and Mom's agreement.
 

@@ -1,0 +1,25 @@
+# Keep libraries up to date for security (owner's rule, 2026-10-31).
+# Updates wait 7 days after a release (supply-chain rule, STANDARDS §6).
+# Minor and patch updates are grouped; .github/workflows/dependabot-merge.yml
+# merges them once the whole safety net is green. Major updates and GitHub
+# Actions updates wait for a review.
+version: 2
+updates:
+  - package-ecosystem: cargo
+    directory: /app
+    schedule: { interval: weekly, day: monday }
+    cooldown: { default-days: 7 }
+    groups:
+      minor-and-patch:
+        update-types: [minor, patch]
+  - package-ecosystem: npm
+    directory: /app
+    schedule: { interval: weekly, day: monday }
+    cooldown: { default-days: 7 }
+    groups:
+      minor-and-patch:
+        update-types: [minor, patch]
+  - package-ecosystem: github-actions
+    directory: /
+    schedule: { interval: weekly, day: monday }
+    cooldown: { default-days: 7 }
