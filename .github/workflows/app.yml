@@ -52,7 +52,7 @@ jobs:
       - name: Screenshots for review
         if: always()
         run: npm run screenshots
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: always()
         with: { name: screenshots, path: app/e2e/screenshots/, retention-days: 14 }
 
@@ -74,7 +74,7 @@ jobs:
         run: npm run build:ui
       - run: cargo clippy -p liseuse --locked -- -D warnings
       - run: npx tauri build --ci
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: installer-windows
           path: app/target/release/bundle/nsis/*.exe
