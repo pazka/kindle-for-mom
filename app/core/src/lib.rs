@@ -3,6 +3,7 @@
 //! is tested with `cargo test -p liseuse-core` on any OS.
 
 pub mod authors;
+pub mod catalog;
 pub mod formats;
 pub mod kindle;
 pub mod library;

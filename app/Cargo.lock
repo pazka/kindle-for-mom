@@ -1823,6 +1823,8 @@ name = "liseuse"
 version = "0.2.1"
 dependencies = [
  "liseuse-core",
+ "reqwest",
+ "rustls",
  "serde",
  "serde_json",
  "tauri",

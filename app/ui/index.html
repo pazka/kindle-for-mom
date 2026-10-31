@@ -11,6 +11,7 @@
   <header class="topbar">
     <h1><span class="logo" aria-hidden="true"></span>Ma liseuse</h1>
     <nav>
+      <button id="btn-find" class="btn btn-green">🔎 Trouver un livre</button>
       <button id="btn-add" class="btn btn-wood">＋ Ajouter un livre</button>
       <button id="btn-folder" class="btn btn-wood">📁 Mes livres</button>
       <button id="btn-help" class="btn btn-help" title="Aide">? Aide</button>
@@ -128,6 +129,41 @@
         <p id="d-size" class="muted"></p>
         <div id="d-actions" class="d-actions"></div>
       </div>
+    </div>
+  </div>
+
+  <!-- find free books (livres.hosh.it) -->
+  <div id="find" class="modal" hidden>
+    <div class="card find-card" role="dialog" aria-modal="true" aria-labelledby="f-title">
+      <button class="close" data-close>✕</button>
+      <h3 id="f-title">Trouver un livre gratuit</h3>
+      <p class="muted">Des livres gratuits et légaux, en français. Choisissez-en un : il arrive dans vos livres, prêt pour la liseuse.</p>
+      <form id="f-form" class="f-form">
+        <input id="f-query" class="search" type="search" placeholder="Un titre ou un auteur, par exemple : Victor Hugo" aria-label="Titre ou auteur">
+        <button class="btn btn-green" type="submit">Chercher</button>
+      </form>
+      <div id="f-suggest" class="chips f-suggest"></div>
+      <p id="f-status" class="f-status" hidden aria-live="polite"></p>
+      <ul id="f-results" class="f-results"></ul>
+      <div id="f-pager" class="f-pager" hidden>
+        <button id="f-prev" class="btn btn-wood btn-small" type="button">← Livres précédents</button>
+        <button id="f-next" class="btn btn-wood btn-small" type="button">Autres livres →</button>
+      </div>
+      <div id="f-ask-cta" class="f-ask-cta">
+        <span>Vous ne trouvez pas votre livre ?</span>
+        <button id="f-ask-open" class="btn btn-blue btn-small" type="button">Demander ce livre à Alexandre</button>
+      </div>
+      <form id="f-ask" class="f-ask" hidden>
+        <h4>Demander un livre</h4>
+        <label>Titre du livre <input id="f-ask-title" class="search" maxlength="200" autocomplete="off"></label>
+        <label>Auteur (si vous le connaissez) <input id="f-ask-author" class="search" maxlength="200" autocomplete="off"></label>
+        <label>Un petit mot (facultatif) <textarea id="f-ask-note" class="search" maxlength="2000" rows="2"></textarea></label>
+        <p id="f-ask-msg" class="f-status" aria-live="polite"></p>
+        <div class="f-ask-btns">
+          <button id="f-ask-cancel" class="btn btn-link" type="button">Annuler</button>
+          <button id="f-ask-send" class="btn btn-green" type="submit">Envoyer la demande</button>
+        </div>
+      </form>
     </div>
   </div>
 

@@ -370,3 +370,67 @@ test("a book bought on Amazon is labelled and can't be sent to a friend", async 
     assert.equal(await page.locator("#d-actions >> text=Envoyer à un ami").count(), 0);
   });
 });
+
+test("she finds a free book by its author and it lands in her books", async () => {
+  await withApp([everyday], async (page) => {
+    await page.click("#btn-find");
+    await page.waitForSelector("#find:not([hidden])");
+    await page.click("#f-suggest >> text=Victor Hugo");
+    await page.waitForSelector(".f-book");
+    assert.equal(await page.locator(".f-book").count(), 2);
+    assert.match(await page.locator("#f-results").innerText(), /Les Misérables/);
+    await page.click(".f-book:has-text('Les Misérables') >> text=Ajouter à mes livres");
+    await page.waitForSelector(".f-book:has-text('Les Misérables') >> text=✓ Dans vos livres");
+    assert.match(await toastText(page), /« Les Misérables » est dans vos livres/);
+    await page.keyboard.press("Escape");
+    await page.waitForSelector("li.book:has-text('Les Misérables')");
+    assert.deepEqual((await fakeState(page)).pc.map((b) => b.id), ["Les Misérables - Victor Hugo"]);
+  });
+});
+
+test("search results come page by page, and a book without a file can't be added", async () => {
+  await withApp([everyday, (f) => { f.state.catalog.perPage = 1; }], async (page) => {
+    await page.click("#btn-find");
+    await page.fill("#f-query", "maupassant");
+    await page.press("#f-query", "Enter");
+    await page.waitForSelector(".f-book:has-text('Bel-Ami')");
+    assert.equal(await page.locator("#f-prev").isVisible(), false);
+    await page.click("#f-next");
+    await page.waitForSelector(".f-book:has-text('Le Horla')");
+    assert.match(await page.locator(".f-book:has-text('Le Horla')").innerText(), /Pas disponible/);
+    assert.equal(await page.locator(".f-book:has-text('Le Horla') button").count(), 0);
+    await page.click("#f-prev");
+    await page.waitForSelector(".f-book:has-text('Bel-Ami')");
+  });
+});
+
+test("nothing found: she asks Alexandre for the book", async () => {
+  await withApp([everyday], async (page) => {
+    await page.click("#btn-find");
+    await page.fill("#f-query", "Le Petit Prince");
+    await page.click("#f-form >> text=Chercher");
+    await page.waitForSelector("#f-status >> text=aucun livre");
+    await page.click("#f-ask-open");
+    assert.equal(await page.inputValue("#f-ask-title"), "Le Petit Prince", "her search is already written in");
+    await page.fill("#f-ask-author", "Saint-Exupéry");
+    await page.fill("#f-ask-note", "Pour relire avec les petits");
+    await page.click("#f-ask-send");
+    await page.waitForSelector("#f-status >> text=est envoyée à Alexandre");
+    assert.equal(await page.locator("#f-ask").isVisible(), false);
+    assert.deepEqual((await fakeState(page)).catalog.requests, [{ title: "Le Petit Prince", author: "Saint-Exupéry", message: "Pour relire avec les petits" }]);
+  });
+});
+
+test("a request needs a title, and no internet is said plainly", async () => {
+  await withApp([everyday, (f) => { f.state.catalog.offline = true; }], async (page) => {
+    await page.click("#btn-find");
+    await page.waitForSelector("#f-status >> text=Pas de connexion à internet");
+    await page.click("#f-ask-open");
+    await page.click("#f-ask-send");
+    assert.match(await page.locator("#f-ask-msg").innerText(), /Indiquez le titre/);
+    await page.fill("#f-ask-title", "Le Petit Prince");
+    await page.click("#f-ask-send");
+    await page.waitForSelector("#f-ask-msg >> text=Pas de connexion à internet");
+    assert.equal(await page.locator("#f-ask").isVisible(), true, "what she typed is kept");
+  });
+});

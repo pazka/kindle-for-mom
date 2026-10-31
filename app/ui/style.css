@@ -253,3 +253,25 @@ input[type=checkbox] { width: 26px; height: 26px; accent-color: var(--green); cu
   .desk { grid-template-columns: minmax(0, 1fr) 300px; gap: 20px; }
   .topbar nav .btn { padding: 9px 12px; }
 }
+
+/* ---------------------------------------------------------------- find a book */
+.find-card { width: min(820px, 94vw); display: flex; flex-direction: column; gap: 10px; }
+.find-card h3 { font-size: 1.4rem; margin: 0 50px 0 0; }
+.find-card > p { margin: 0; }
+.f-form { display: flex; gap: 10px; }
+.f-suggest { align-items: center; }
+.f-status { margin: 0; font-weight: 600; }
+.f-status.bad { color: var(--red); }
+.f-status.ok { color: var(--green-d); }
+.f-results { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; overflow: auto; min-height: 0; max-height: 46vh; }
+.f-book { cursor: default; align-items: flex-start; }
+.f-desc { margin: 4px 0 0; font-size: .85rem; color: var(--muted); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.f-pager { display: flex; justify-content: space-between; }
+.f-ask-cta { display: flex; align-items: center; gap: 12px; justify-content: flex-end; border-top: 2px dashed #d8c7a6; padding-top: 10px; }
+.f-ask { display: flex; flex-direction: column; gap: 8px; border-top: 2px dashed #d8c7a6; padding-top: 10px; }
+.f-ask h4 { margin: 0; }
+.f-ask label { display: flex; flex-direction: column; gap: 4px; font-weight: 600; font-size: .9rem; }
+.f-ask textarea { resize: vertical; font: inherit; }
+.f-ask-btns { display: flex; justify-content: flex-end; gap: 10px; }
+.f-ask .search { flex: none; }
+.find-card.asking .f-results, .find-card.asking .f-pager { display: none; }

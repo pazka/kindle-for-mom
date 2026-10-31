@@ -22,6 +22,19 @@
       trash: new Map(),
       update: null, // version offered by check_update
       overviewDelay: 0, // ms: a real Kindle with 1 000 books takes a while the first time
+      // livres.hosh.it (shapes from core/testdata/livres, parsed by core/src/catalog.rs)
+      catalog: {
+        offline: false,
+        suggestions: [{ title: "Victor Hugo", url: "https://livres.hosh.it/opds/v2/search?query=Victor%20Hugo" }],
+        books: [
+          { id: "egg:1", title: "Les Misérables", author: "Victor Hugo", description: "Jean Valjean, ancien forçat.", source: "Ebooks libres et gratuits", download: { url: "https://www.ebooksgratuits.com/1.mobi", format: "mobi", size: 900000 } },
+          { id: "egg:2", title: "Notre-Dame de Paris", author: "Victor Hugo", description: null, source: "Ebooks libres et gratuits", download: { url: "https://www.ebooksgratuits.com/2.mobi", format: "mobi", size: 800000 } },
+          { id: "egg:3", title: "Bel-Ami", author: "Guy de Maupassant", description: "Georges Duroy fait carrière.", source: "Ebooks libres et gratuits", download: { url: "https://www.ebooksgratuits.com/3.mobi", format: "mobi", size: 500000 } },
+          { id: "egg:4", title: "Le Horla", author: "Guy de Maupassant", description: null, source: "Wikisource", download: null },
+        ],
+        perPage: 2,
+        requests: [],
+      },
     },
   };
 
@@ -185,6 +198,36 @@
     check_update: () => (fake.state.update ? { current: "0.2.0", version: fake.state.update } : null),
     install_update: () => { fake.installed = fake.state.update; return new Promise(() => {}); }, // the real app closes here
     sort_author: ({ name }) => (name.includes(",") ? name : name.replace(/^(.*) (\S+)$/, "$2, $1")),
+    catalog_page: ({ url, query }) => {
+      const c = fake.state.catalog;
+      if (c.offline) throw err("offline", "Pas de connexion à internet pour l'instant. Vérifiez la connexion, puis réessayez.");
+      const BASE = "https://livres.hosh.it/opds/v2/search";
+      let pageNo = 1;
+      if (!query && url) {
+        const u = new URL(url);
+        query = u.searchParams.get("query");
+        pageNo = Number(u.searchParams.get("page") || 1);
+      }
+      if (!query) return { title: "Livres gratuits et légaux", books: [], suggestions: c.suggestions, next: null, previous: null };
+      const w = words(query);
+      const all = c.books.filter((b) => w.every((x) => words(`${b.title} ${b.author}`).includes(x)));
+      const books = all.slice((pageNo - 1) * c.perPage, pageNo * c.perPage);
+      const link = (n) => `${BASE}?query=${encodeURIComponent(query)}&page=${n}`;
+      return { title: `Résultats pour « ${query} »`, books, suggestions: [], next: all.length > pageNo * c.perPage ? link(pageNo + 1) : null, previous: pageNo > 1 ? link(pageNo - 1) : null };
+    },
+    catalog_download: ({ url, format, title, author }) => {
+      const b = fake.state.catalog.books.find((x) => x.download?.url === url);
+      if (!b) throw err("catalog", "Ce livre ne peut pas être téléchargé depuis cet endroit.");
+      const stem = uniqueStem(author ? `${title} - ${author}` : title);
+      fake.state.pc.push(pcBook(stem, format, b.download.size));
+      return stem;
+    },
+    catalog_request: ({ title, author, message }) => {
+      if (fake.state.catalog.offline) throw err("offline", "Pas de connexion à internet pour l'instant. Vérifiez la connexion, puis réessayez.");
+      if (title.trim().length < 2) throw err("catalog", "Indiquez le titre du livre que vous cherchez.");
+      fake.state.catalog.requests.push({ title, author, message });
+      return null;
+    },
     share_book: ({ id }) => { if (!fake.state.pc.some((b) => b.id === id)) throw err("missing", "Ce livre n'est plus là."); fake.shared = id; return null; },
   };
 

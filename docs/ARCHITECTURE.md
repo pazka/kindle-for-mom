@@ -21,8 +21,8 @@
 
 | Layer | Path | Responsibility | Tested by |
 |---|---|---|---|
-| core | `app/core` | Library folder, Kindle detection and free space, transfers, reading positions, trash, downloads watcher, MOBI metadata, format advice. Rust std + serde only. | `cargo test -p liseuse-core` (Linux + Windows) |
-| shell | `app/src-tauri` | Registers commands, maps them to core, validates outside paths, raw binary IPC. No logic. | contract test, Windows build |
+| core | `app/core` | Library folder, Kindle detection and free space, transfers, reading positions, trash, downloads watcher, MOBI metadata, format advice, checks on what the livres.hosh.it catalogue sends (`catalog.rs`). Rust std + serde only. | `cargo test -p liseuse-core` (Linux + Windows) |
+| shell | `app/src-tauri` | Registers commands, maps them to core, validates outside paths, raw binary IPC, HTTPS calls to livres.hosh.it (`catalog.rs`, timeouts and size limits). No logic. | contract test, Windows build |
 | converter | `app/converter` | EPUB 2/3 → MOBI 6 for the Kindle 4, in the web view (offline). | `converter/test` |
 | UI | `app/ui` | Desk scene, guide, tips, conversion queue. `api.js` is the only file that calls the backend. | `ui/test`, `e2e/` |
 
@@ -54,5 +54,5 @@ from that sort, the key that recognises the same book on both sides) are in
 ## Coming next
 
 - v0.2 (done): signed updates from GitHub Releases, test/stable channels and rollback through the release marked Latest (ADR-0007, `docs/RELEASING.md`). An admin on livres.hosh.it can later replace the endpoint.
-- v0.3: OPDS 2.0 catalogue aggregated on the server from legal sources; "Trouver un livre" shelf in the app.
+- v0.3: "Trouver un livre" window on the OPDS 2.0 catalogue of livres.hosh.it, with "Demander un livre" (ADR-0008). In progress: merged, released once the server is online.
 - Windows 10 support pass (same build; test matrix on a Windows 10 VM).
