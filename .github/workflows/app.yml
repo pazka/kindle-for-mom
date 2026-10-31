@@ -1,6 +1,8 @@
-# Windows app: every push and PR runs the whole safety net. A tag vX.Y.Z
-# builds the installer and publishes a GitHub release, but only if every
-# check below is green (the release job `needs` all of them).
+# Windows app: every push and PR runs the whole safety net.
+# Releasing (docs/RELEASING.md): when main carries a version that has no
+# tag yet (a merged version bump), or a tag vX.Y.Z is pushed, the installer
+# is built signed and published as a pre-release, only if every check below
+# is green (the release job `needs` all of them).
 name: app
 
 on:
@@ -17,13 +19,33 @@ permissions:
 
 concurrency:
   group: app-${{ github.ref }}
-  cancel-in-progress: ${{ !startsWith(github.ref, 'refs/tags/') }}
+  # never cancel a run on main or a tag: it may be publishing a release
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 defaults:
   run:
     working-directory: app
 
 jobs:
+  version:
+    name: Release needed?
+    runs-on: ubuntu-24.04
+    outputs:
+      tag: ${{ steps.v.outputs.tag }}
+    steps:
+      - uses: actions/checkout@v7
+      - id: v
+        name: Tag to publish (empty when nothing to release)
+        run: |
+          node scripts/check-version.mjs
+          version=$(node -p 'require("./package.json").version')
+          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
+            echo "tag=$GITHUB_REF_NAME" >> "$GITHUB_OUTPUT"
+          elif [[ "$GITHUB_EVENT_NAME" == push && "$GITHUB_REF" == refs/heads/main ]] \
+               && [ -z "$(git ls-remote --tags origin "refs/tags/v$version")" ]; then
+            echo "tag=v$version" >> "$GITHUB_OUTPUT"
+          fi
+
   policy:
     name: Dependabot merge policy (self-test)
     runs-on: ubuntu-24.04
@@ -68,7 +90,7 @@ jobs:
 
   windows:
     name: Windows (core tests on NTFS + installer)
-    needs: [core, ui]
+    needs: [version, core, ui]
     runs-on: windows-2025
     steps:
       - uses: actions/checkout@v7
@@ -83,13 +105,14 @@ jobs:
       - name: Assemble the web view (the shell embeds dist/ at compile time)
         run: npm run build:ui
       - run: cargo clippy -p liseuse --locked -- -D warnings
-      - name: Build the installer (signed for the updater on release tags)
+      - name: Build the installer (signed for the updater when releasing)
         shell: bash
         env:
-          TAURI_SIGNING_PRIVATE_KEY: ${{ startsWith(github.ref, 'refs/tags/v') && secrets.TAURI_SIGNING_PRIVATE_KEY || '' }}
-          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ startsWith(github.ref, 'refs/tags/v') && secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD || '' }}
+          RELEASE_TAG: ${{ needs.version.outputs.tag }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ needs.version.outputs.tag != '' && secrets.TAURI_SIGNING_PRIVATE_KEY || '' }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ needs.version.outputs.tag != '' && secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD || '' }}
         run: |
-          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
+          if [ -n "$RELEASE_TAG" ]; then
             [ -n "$TAURI_SIGNING_PRIVATE_KEY" ] || { echo "::error::secret TAURI_SIGNING_PRIVATE_KEY missing: a release must be signed"; exit 1; }
             npx tauri build --ci --config '{"bundle":{"createUpdaterArtifacts":true}}'
           else
@@ -106,24 +129,26 @@ jobs:
 
   release:
     name: Publish release
-    if: startsWith(github.ref, 'refs/tags/v')
-    needs: [policy, core, ui, windows]
+    if: needs.version.outputs.tag != ''
+    needs: [version, policy, core, ui, windows]
     runs-on: ubuntu-24.04
     permissions:
       contents: write
     steps:
       - uses: actions/checkout@v7
-      - run: node scripts/check-version.mjs "${GITHUB_REF_NAME}"
+      - run: node scripts/check-version.mjs "${{ needs.version.outputs.tag }}"
       - uses: actions/download-artifact@v8
         with: { name: installer-windows, path: dist-release }
       - name: Create the GitHub release
         env:
           GH_TOKEN: ${{ github.token }}
+          TAG: ${{ needs.version.outputs.tag }}
         run: |
           cd ..
-          node app/scripts/updater-manifest.mjs dist-release "${GITHUB_REF_NAME}" "${GITHUB_REPOSITORY}"
+          node app/scripts/updater-manifest.mjs dist-release "$TAG" "${GITHUB_REPOSITORY}"
           (cd dist-release && sha256sum *.exe > SHA256SUMS.txt)
           # A new release is the "test" channel (pre-release): Mom's app only
           # follows the release marked "Latest". Promote it there by hand once
           # it ran on your PC; roll back by marking the previous one Latest.
-          gh release create "${GITHUB_REF_NAME}" dist-release/* --prerelease --title "Ma liseuse ${GITHUB_REF_NAME}" --notes-file app/CHANGELOG.md --verify-tag
+          # The tag is created here, on the commit that passed every check.
+          gh release create "$TAG" dist-release/* --prerelease --target "$GITHUB_SHA" --title "Ma liseuse $TAG" --notes-file app/CHANGELOG.md
