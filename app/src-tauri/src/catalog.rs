@@ -158,3 +158,31 @@ pub async fn request(title: &str, author: &str, message: &str) -> Res<()> {
     }
     Ok(())
 }
+
+/// Against the real server (CI job "Live catalogue"; not run by default
+/// because it needs the internet). Never sends a request to Alexandre.
+#[cfg(test)]
+mod live {
+    use super::*;
+
+    #[test]
+    #[ignore = "needs internet: cargo test -p liseuse -- --ignored"]
+    fn livres_hosh_it_answers_like_the_contract() {
+        let _ = rustls::crypto::ring::default_provider().install_default();
+        tauri::async_runtime::block_on(async {
+            let home = page(None, None).await.expect("first page");
+            assert!(!home.suggestions.is_empty(), "author ideas");
+            let found = page(None, Some("hugo".into())).await.expect("search");
+            assert!(!found.books.is_empty(), "results for hugo");
+            let book = found.books.iter().find(|b| b.download.is_some()).expect("a downloadable book");
+            let d = book.download.as_ref().unwrap();
+            let to = std::env::temp_dir().join(format!("live-book.{}", d.format.ext()));
+            download(&d.url, d.format, &to, 300 * 1024 * 1024).await.expect("download");
+            assert!(std::fs::metadata(&to).unwrap().len() > 1000);
+            let _ = std::fs::remove_file(&to);
+            if let Some(next) = &found.next {
+                page(Some(next.clone()), None).await.expect("next page");
+            }
+        });
+    }
+}
