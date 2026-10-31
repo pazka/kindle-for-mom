@@ -2,7 +2,12 @@
 
 All notable changes to Ma liseuse. Format: [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/), versions: [SemVer](https://semver.org/).
 
-## [0.1.0] - unreleased
+## [0.2.0] - unreleased
+
+### Added
+- Automatic, signed updates: a new version installs when she opens the app, with a short message, and the app reopens by itself. Without internet, the app starts as usual.
+
+## [0.1.0] - not released (included in 0.2.0)
 
 ### Added
 - Works with the Kindle as it was sorted on 2026-10-31: books in author folders ("Nom, Prénom") are listed with their real title, sorted by author; notes ("Mes extraits"), dictionaries and screenshots are left alone; nothing already on the Kindle is ever moved or renamed, so collections keep working.

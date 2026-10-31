@@ -109,6 +109,27 @@ test("her sorted Kindle: everything only on the Kindle is backed up in one click
   });
 });
 
+test("a new version is installed at start with a calm message, before anything else", async () => {
+  const { page, context } = await openApp(browser, url, [everyday, (f) => { f.state.update = "0.3.0"; f.plug(); f.addPcBook("Candide - Voltaire", "mobi", 400_000); }]);
+  try {
+    await page.waitForSelector("#updating:not([hidden])");
+    assert.match(await page.locator("#updating").innerText(), /se met à jour.*se rouvrir toute seule/s);
+    assert.equal(await page.evaluate(() => window.__fake.installed), "0.3.0");
+    await page.keyboard.press("Escape");
+    assert.equal(await page.locator("#updating").isVisible(), true, "can't be dismissed");
+    assert.equal(await page.locator("li.book").count(), 0, "nothing else starts during the update");
+  } finally {
+    await context.close();
+  }
+});
+
+test("no update, or no internet: the app starts as usual", async () => {
+  await withApp([everyday, (f) => { f.addPcBook("Candide - Voltaire", "mobi", 400_000); }], async (page) => {
+    await page.waitForSelector("li.book");
+    assert.equal(await page.locator("#updating").isVisible(), false);
+  });
+});
+
 test("a full Kindle explains what to do instead of failing", async () => {
   await withApp([everyday, (f) => { f.plug(40 * 1024 * 1024); f.addPcBook("Atlas", "pdf", 30 * 1024 * 1024); }], async (page) => {
     await page.click(".book-action");

@@ -10,7 +10,8 @@ use liseuse_core::library::{DownloadCandidate, Library, OpError, Overview};
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 use tauri::ipc::{InvokeBody, Request, Response};
-use tauri::{Manager, State};
+use tauri::{AppHandle, Manager, State};
+use tauri_plugin_updater::{Update, UpdaterExt};
 
 /// Books bigger than this are refused (nobody's novel is 300 MB).
 const MAX_BOOK: u64 = 300 * 1024 * 1024;
@@ -19,6 +20,15 @@ struct App {
     lib: Library,
     downloads: Option<PathBuf>,
     kindle: Mutex<Option<Kindle>>,
+    /// Update found by `check_update`, installed by `install_update`.
+    update: Mutex<Option<Update>>,
+}
+
+/// What the screen needs to know about an available update.
+#[derive(serde::Serialize)]
+struct UpdateInfo {
+    current: String,
+    version: String,
 }
 
 type Res<T> = Result<T, OpError>;
@@ -267,6 +277,45 @@ async fn share_book(app: State<'_, App>, id: String) -> Res<()> {
 }
 
 /// Show the library folder in File Explorer.
+/// Ask GitHub Releases (the release marked "latest") whether another version
+/// should run here. Any version different from this one counts, so pointing
+/// "latest" back at the previous release rolls Mom's app back (ADR-0007).
+/// The download is refused unless it is signed with Pazka's key.
+/// Offline or any error: no update, the app just carries on.
+#[tauri::command]
+async fn check_update(handle: AppHandle, app: State<'_, App>) -> Res<Option<UpdateInfo>> {
+    let found = handle
+        .updater_builder()
+        .version_comparator(|current, remote| remote.version != current)
+        .timeout(std::time::Duration::from_secs(20))
+        .build()
+        .map_err(|e| OpError::new("update", e.to_string()))?
+        .check()
+        .await
+        .map_err(|e| OpError::new("update", e.to_string()))?;
+    let info = found.as_ref().map(|u| UpdateInfo {
+        current: u.current_version.clone(),
+        version: u.version.clone(),
+    });
+    *app.update.lock().unwrap() = found;
+    Ok(info)
+}
+
+/// Download, check the signature and run the installer (which closes the app
+/// and opens the new version).
+#[tauri::command]
+async fn install_update(handle: AppHandle, app: State<'_, App>) -> Res<()> {
+    let update = app.update.lock().unwrap().take();
+    let Some(update) = update else {
+        return Ok(());
+    };
+    update
+        .download_and_install(|_, _| {}, || {})
+        .await
+        .map_err(|e| OpError::new("update", e.to_string()))?;
+    handle.restart();
+}
+
 #[tauri::command]
 async fn open_library(app: State<'_, App>) -> Res<()> {
     let root = app.lib.root().to_path_buf();
@@ -283,6 +332,7 @@ async fn open_library(app: State<'_, App>) -> Res<()> {
 
 fn main() {
     tauri::Builder::default()
+        .plugin(tauri_plugin_updater::Builder::new().build())
         .setup(|app| {
             let docs = app
                 .path()
@@ -297,6 +347,7 @@ fn main() {
                 lib,
                 downloads,
                 kindle: Mutex::new(None),
+                update: Mutex::new(None),
             });
             Ok(())
         })
@@ -322,6 +373,8 @@ fn main() {
             set_ui_state,
             open_library,
             share_book,
+            check_update,
+            install_update,
         ])
         .run(tauri::generate_context!())
         .expect("Ma liseuse n'a pas pu démarrer");

@@ -30,6 +30,9 @@ export const api = {
   setUiState: (ui) => invoke("set_ui_state", { ui }),
   openLibrary: () => invoke("open_library"),
   shareBook: (id) => invoke("share_book", { id }),
+  /** {current, version} when another signed version should run here, else null. */
+  checkUpdate: () => invoke("check_update"),
+  installUpdate: () => invoke("install_update"),
   /** Files dropped from File Explorer: cb(paths), plus hover in/out. */
   onFileDrop(cb, hover) {
     const ev = window.__TAURI__.event;
