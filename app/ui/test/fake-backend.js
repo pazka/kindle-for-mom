@@ -43,7 +43,7 @@
     return {
       id: stem, file_name: `${stem}.${format}`, title, author, format, size, kindle_size: native ? size : Math.round(size * 1.3),
       light, advice: adv, ready: native, converting: !native, error: null, on_kindle: false,
-      kindle_name: `${stem}.${native ? format : "mobi"}`, added: 0, protected: false, ...extra,
+      kindle_name: `${stem}.${native ? format : "mobi"}`, kindle_id: null, added: 0, protected: false, ...extra,
     };
   }
 
@@ -54,14 +54,22 @@
     return { root: "E:\\", label: "Kindle", total_bytes: k.total, free_bytes: Math.max(0, k.total - used) };
   }
 
+  // Same book on both sides: same Kindle path, or same title + author
+  // (the real rules are in core/src/library.rs `link`).
+  const words = (s) => (s || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().split(/[^a-z0-9]+/).filter(Boolean);
+  const key = (b) => `${words(b.author).sort().join(" ")}|${words(b.title).join(" ")}`;
   function overview() {
     const info = kindleInfo();
-    const names = new Set((fake.state.kindle?.books || []).map((b) => b.id.toLowerCase()));
-    const pc = fake.state.pc.map((b) => ({ ...b, on_kindle: names.has(b.kindle_name.toLowerCase()) }));
+    const kbooks = fake.state.kindle?.books || [];
+    const match = (b) => kbooks.find((k) => k.id.toLowerCase() === b.kindle_name.toLowerCase() || key(k) === key(b));
+    const pc = fake.state.pc.map((b) => {
+      const k = match(b);
+      return { ...b, on_kindle: Boolean(k), kindle_id: k ? k.id : null };
+    });
     let kindle = null;
     if (info) {
-      const pcNames = new Set(pc.map((b) => b.kindle_name.toLowerCase()));
-      const books = fake.state.kindle.books.map((b) => ({ ...b, on_pc: pcNames.has(b.id.toLowerCase()) }));
+      const linked = new Set(pc.map((b) => b.kindle_id).filter(Boolean));
+      const books = kbooks.map((b) => ({ ...b, on_pc: linked.has(b.id) }));
       const used = Math.round(100 - (info.free_bytes * 100) / info.total_bytes);
       const freePct = 100 - used;
       const sizes = books.filter((b) => b.format !== "pdf").map((b) => b.size);
@@ -99,19 +107,21 @@
       return null;
     },
     take_from_kindle: ({ file }) => {
+      const id = commands.save_to_pc({ file });
+      const k = fake.state.kindle;
+      k.books.splice(k.books.findIndex((b) => b.id === file), 1);
+      return id;
+    },
+    save_to_pc: ({ file }) => {
       const k = fake.state.kindle;
       if (!k) throw err("no_kindle", "La liseuse n'est pas branchée.");
-      const i = k.books.findIndex((b) => b.id === file);
-      if (i < 0) throw err("missing", "Ce livre n'est plus là.");
-      const kb = k.books[i];
-      let pc = fake.state.pc.find((b) => b.kindle_name.toLowerCase() === file.toLowerCase());
-      if (!pc) {
-        const stem = uniqueStem(kb.author ? `${kb.title} - ${kb.author}` : kb.title);
-        pc = pcBook(stem, kb.format, kb.size);
-        fake.state.pc.push(pc);
-      }
-      k.books.splice(i, 1);
-      return pc.id;
+      const kb = k.books.find((b) => b.id === file);
+      if (!kb) throw err("missing", "Ce livre n'est plus là.");
+      const linked = overview().pc.find((b) => b.kindle_id === file);
+      if (linked) return linked.id;
+      const stem = uniqueStem(kb.author ? `${kb.title} - ${kb.author}` : kb.title);
+      fake.state.pc.push(pcBook(stem, kb.format, kb.size, { kindle_name: file }));
+      return stem;
     },
     eject: () => { if (!fake.state.kindle) throw err("no_kindle", "La liseuse n'est pas branchée."); fake.ejected = true; return null; },
     add_path: ({ path }) => {

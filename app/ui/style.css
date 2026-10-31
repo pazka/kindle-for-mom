@@ -173,6 +173,8 @@ input[type=checkbox] { width: 26px; height: 26px; accent-color: var(--green); cu
 .k-item .btn, .k-bar .btn { font-family: "Segoe UI", system-ui, sans-serif; }
 .k-bar { display: flex; align-items: center; gap: 8px; padding: 8px 10px; border-top: 2px solid var(--eink-ink); font-size: .85rem; font-weight: 700; }
 .k-bar span { flex: 1; }
+.k-save { display: flex; align-items: center; gap: 8px; padding: 6px 10px; border-bottom: 2px dashed var(--eink-ink); font-size: .85rem; }
+.k-save span { flex: 1; }
 
 .k-status { width: 100%; display: flex; flex-direction: column; gap: 8px; flex: 0 0 auto; }
 .k-detected { background: var(--green); color: #fff; font-weight: 700; padding: 8px 14px; border-radius: 12px; text-align: center; font-size: 1.05rem; animation: pop .4s ease-out; }

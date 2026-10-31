@@ -38,11 +38,12 @@ export function bookName(meta) {
 
 /**
  * After converting an EPUB, rename it to "Titre - Auteur" unless its file
- * name already reads like one (Mom or Pazka named it on purpose).
+ * name already reads like one (Mom or Pazka named it on purpose) or it is
+ * already in an author folder.
  */
 export function shouldRename(id, wanted) {
   if (!wanted || wanted.toLowerCase() === "livre") return false;
-  if (id.includes(" - ")) return false;
+  if (id.includes(" - ") || id.includes("/")) return false; // "Auteur/Titre" is already filed
   return id.toLowerCase() !== wanted.toLowerCase();
 }
 

@@ -13,6 +13,7 @@ export const api = {
   overview: () => invoke("overview"),
   putOnKindle: (id) => invoke("put_on_kindle", { id }),
   takeFromKindle: (file) => invoke("take_from_kindle", { file }),
+  saveToPc: (file) => invoke("save_to_pc", { file }),
   eject: () => invoke("eject"),
   addPath: (path) => invoke("add_path", { path }),
   addBytes: (name, ext, bytes) => invoke("add_bytes", bytes, { headers: { "x-name": enc(name), "x-ext": ext } }),

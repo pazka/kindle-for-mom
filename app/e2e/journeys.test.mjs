@@ -88,6 +88,27 @@ test("a book only on the Kindle is saved on the PC when taken off", async () => 
   });
 });
 
+test("her sorted Kindle: everything only on the Kindle is backed up in one click, the Kindle unchanged", async () => {
+  const seed = (f) => {
+    f.plug();
+    f.addKindleBook("Hugo, Victor/Les Miserables.mobi", "Les Misérables", "Hugo, Victor", 1_200_000);
+    for (let i = 1; i <= 24; i++) f.addKindleBook(`Asimov, Isaac/Fondation ${i}.mobi`, `Fondation ${i}`, "Asimov, Isaac", 500_000);
+    f.addPcBook("Les Misérables - Hugo, Victor", "mobi", 1_200_000);
+  };
+  await withApp([everyday, seed], async (page) => {
+    await page.waitForSelector("#k-save:not([hidden])");
+    assert.match(await page.locator("#k-save-text").innerText(), /24 livres ne sont que sur la liseuse/);
+    await page.click("#k-save-go");
+    await page.waitForFunction(() => document.querySelector("#k-save").hidden, null, { timeout: 15000 });
+    assert.match(await toastText(page), /24 livres sauvegardés sur l'ordinateur\. La liseuse n'a pas changé/);
+    const st = await fakeState(page);
+    assert.equal(st.kindle.books.length, 25, "nothing removed from the Kindle");
+    assert.equal(st.pc.length, 25);
+    // the book that was already on the PC is recognised, not copied twice
+    assert.equal(st.pc.filter((b) => b.title === "Les Misérables").length, 1);
+  });
+});
+
 test("a full Kindle explains what to do instead of failing", async () => {
   await withApp([everyday, (f) => { f.plug(40 * 1024 * 1024); f.addPcBook("Atlas", "pdf", 30 * 1024 * 1024); }], async (page) => {
     await page.click(".book-action");

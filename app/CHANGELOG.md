@@ -5,10 +5,14 @@ All notable changes to Ma liseuse. Format: [Keep a Changelog](https://keepachang
 ## [0.1.0] - unreleased
 
 ### Added
-- Library in `Documents\Mes livres` (plain files, EPUB kept as the master copy).
+- Works with the Kindle as it was sorted on 2026-10-31: books in author folders ("Nom, Prénom") are listed with their real title, sorted by author; notes ("Mes extraits"), dictionaries and screenshots are left alone; nothing already on the Kindle is ever moved or renamed, so collections keep working.
+- New books go into the author's folder on the Kindle (her existing folder when there is one) and on the PC.
+- Reading positions of the Kindle 4 (`.mbp`, `.apnx`… files) leave and come back with each book; a book comes back to exactly where it was.
+- "Tout sauvegarder sur l'ordinateur": copies every book that is only on the Kindle to the PC, without changing the Kindle.
+- Library in `Documents\Mes livres` (plain files, one folder per author, EPUB kept as the master copy).
 - Automatic Kindle 4 detection over USB, without choosing a drive.
 - Fill gauge with "room for about N books", warnings under 15 % and 5 % free.
-- Put a book on the Kindle / take it back, keeping the reading position (`.sdr`).
+- Put a book on the Kindle / take it back, keeping the reading position.
 - Books only on the Kindle are saved on the PC before being removed.
 - Background EPUB → MOBI conversion; DRM-protected books explained.
 - Traffic light per book (vert / orange / rouge) with a plain explanation.

@@ -45,6 +45,12 @@ drive or its free space changes. See `app/core/src/kindle.rs`.
 See the header of `app/core/src/library.rs`. The files are the source of
 truth, there is no database to corrupt.
 
+Both the PC and the Kindle use one folder per author ("Nom, Prénom"), the
+layout her Kindle was sorted into on 2026-10-31 (ADR-0006). Name rules
+(ASCII names for the Kindle, "Prénom Nom" → "Nom, Prénom", the alias table
+from that sort, the key that recognises the same book on both sides) are in
+`app/core/src/authors.rs`.
+
 ## Coming next
 
 - v0.2: signed updater (Tauri updater plugin) + `server/` on livres.hosh.it following the hosh.it box standard, admin with channels and rollback.

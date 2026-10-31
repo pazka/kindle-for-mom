@@ -11,14 +11,16 @@ ADR.
 
 | # | Invariant | Guarded by |
 |---|---|---|
-| D1 | Her books are plain files in `Documents\Mes livres`; the app's own data is in `.liseuse/` and can be rebuilt. | `core/src/library.rs` layout, ADR-0003 |
+| D1 | Her books are plain files in `Documents\Mes livres` (one folder per author); the app's own data is in `.liseuse/` and can be rebuilt. | `core/src/library.rs` layout, ADR-0003, ADR-0006 |
 | D2 | A book is never removed from the Kindle unless a verified copy exists on the PC. | `book_only_on_kindle_is_saved_before_removal` |
 | D3 | Deleting from the PC goes to a 30-day trash with an undo. | `duplicate_names_get_a_number_and_trash_restores`, e2e "deleting a book can be undone" |
 | D4 | Every copy is atomic: temp file, flush to the device, rename. A pulled cable never leaves half a book. | `copy_durable` |
-| D5 | Reading positions (`.sdr`) leave and come back with their book. | `epub_lifecycle_put_and_take_back_with_reading_position` |
+| D5 | Reading positions (Kindle 4 `.mbp`/`.apnx`/… files, or `.sdr` folders) leave and come back with their book. | `epub_lifecycle_put_and_take_back_with_reading_position`, `a_book_goes_back_to_its_exact_place…` |
 | D6 | The original EPUB is kept; the MOBI is a disposable copy. | `epub_lifecycle…`, `rename_moves_kindle_copy` |
 | D7 | Nothing is copied when it doesn't fit; she gets a sentence explaining what to do. | `refuses_when_kindle_is_full_and_on_drm`, e2e "a full Kindle…" |
-| D8 | Files Amazon put on the Kindle (clippings, dictionaries) are never listed or moved. | `book_only_on_kindle_is_saved_before_removal` |
+| D8 | Notes ("Mes extraits", clippings), dictionaries, screenshots and `system/` are never listed or moved. | `her_sorted_kindle_is_listed_and_left_untouched`, `book_only_on_kindle_is_saved_before_removal` |
+| D10 | Files already on the Kindle are never renamed, moved or replaced, and `collections.json` is never edited; a book that comes back goes to the exact path it left from, so her collections still find it. Looking at the Kindle changes nothing. | `her_sorted_kindle_is_listed_and_left_untouched`, `a_book_goes_back_to_its_exact_place_so_collections_still_find_it`, `new_books_join_her_author_folders_and_never_replace_a_file` |
+| D11 | "Tout sauvegarder sur l'ordinateur" never changes the Kindle and never copies a book twice. | `whole_kindle_is_saved_on_the_pc_without_touching_it`, e2e "her sorted Kindle…" |
 | D9 | Books bought on Amazon (DRM) are listed, kept on the PC as a backup and can go back on her Kindle, but are never offered for sharing. | `amazon_protected_books_are_listed_kept_and_flagged`, e2e "a book bought on Amazon…" |
 
 ## 2. The safety net (non-regression)

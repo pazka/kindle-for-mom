@@ -21,8 +21,9 @@ const shots = [
   ["1-guide-premier-demarrage", (f) => {}],
   ["2-bibliotheque-sans-liseuse", library],
   ["3-liseuse-branchee", [library, (f) => {
-    f.plug(); f.addKindleBook("Les Misérables - Victor Hugo.mobi", "Les Misérables", "Victor Hugo", 2_600_000);
-    f.addKindleBook("B00ABC_EBOK.azw", "Le Petit Prince", "Antoine de Saint-Exupéry", 900_000);
+    f.plug(); f.addKindleBook("Hugo, Victor/Les Miserables.mobi", "Les Misérables", "Hugo, Victor", 2_600_000);
+    f.addKindleBook("Asimov, Isaac/L'aube de Fondation.mobi", "L'aube de Fondation", "Asimov, Isaac", 600_000);
+    f.addKindleBook("Saint-Exupery, Antoine de/Le Petit Prince.azw", "Le Petit Prince", "Saint-Exupéry, Antoine de", 900_000, "azw");
   }]],
   ["4-presque-pleine", [library, (f) => { f.plug(160 * 1024 * 1024); f.addKindleBook("Gros.pdf", "Atlas du monde", null, 125 * 1024 * 1024, "pdf"); }]],
   ["5-nouveau-telechargement", [library, (f) => { f.addDownload("Candide - Voltaire.epub"); }]],

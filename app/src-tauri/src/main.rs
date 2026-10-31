@@ -122,6 +122,12 @@ async fn take_from_kindle(app: State<'_, App>, file: String) -> Res<String> {
 }
 
 #[tauri::command]
+async fn save_to_pc(app: State<'_, App>, file: String) -> Res<String> {
+    let k = current_kindle(&app)?;
+    app.lib.save_to_pc(&file, &k)
+}
+
+#[tauri::command]
 async fn eject(app: State<'_, App>) -> Res<()> {
     let k = current_kindle(&app)?;
     kindle::eject(&k).map_err(|e| {
@@ -292,6 +298,7 @@ fn main() {
             overview,
             put_on_kindle,
             take_from_kindle,
+            save_to_pc,
             eject,
             add_path,
             add_bytes,

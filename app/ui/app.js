@@ -226,6 +226,19 @@ function takeFromKindle(kbs) {
   });
 }
 
+/** Copy every book that is only on the Kindle to the PC; the Kindle is not changed. */
+function saveAllToPc() {
+  const only = (state.overview.kindle?.books || []).filter((b) => !b.on_pc);
+  return bulk(only, {
+    title: "Je sauvegarde les livres de la liseuse sur l'ordinateur…",
+    step: (kb) => api.saveToPc(kb.id),
+    done: (n, total) => {
+      const msg = `${plural(n, "livre sauvegardé", "livres sauvegardés")} sur l'ordinateur. La liseuse n'a pas changé.`;
+      toast(n < total ? `${msg} (arrêté avant la fin)` : msg, { kind: "ok", ms: 8000 });
+    },
+  });
+}
+
 async function deleteBook(book) {
   const trashId = await run(() => api.deleteBook(book.id));
   if (!trashId) return;
@@ -370,6 +383,12 @@ function renderKindle() {
   $("btn-eject").disabled = state.busy;
   $("k-count").textContent = plural(side.books.length, "livre");
   $("k-empty").hidden = side.books.length > 0;
+  const onlyHere = side.books.filter((b) => !b.on_pc).length;
+  $("k-save").hidden = onlyHere === 0;
+  $("k-save-text").textContent = onlyHere === 1
+    ? "1 livre n'est que sur la liseuse."
+    : `${onlyHere} livres ne sont que sur la liseuse.`;
+  $("k-save-go").disabled = state.busy;
   $("k-search").hidden = side.books.length < 8;
   const shown = filterKindle(side.books, state.kquery);
   $("k-list").replaceChildren(
@@ -426,7 +445,7 @@ function showDetails(book) {
     actions.push(el("button", { className: "btn btn-green", textContent: "Mettre dans la liseuse →", onclick: () => { close(); putOnKindle([book]); } }));
   }
   if (side && book.on_kindle) {
-    const kb = side.books.find((k) => k.id.toLowerCase() === book.kindle_name.toLowerCase());
+    const kb = side.books.find((k) => k.id === book.kindle_id);
     if (kb) actions.push(el("button", { className: "btn btn-wood", textContent: "← Enlever de la liseuse", onclick: () => { close(); takeFromKindle([kb]); } }));
   }
   if (!book.protected) {
@@ -471,6 +490,7 @@ async function main() {
     state.sel.clear();
     putOnKindle(books);
   };
+  $("k-save-go").onclick = () => saveAllToPc();
   $("k-bar-go").onclick = () => {
     const kbs = (state.overview.kindle?.books || []).filter((b) => state.ksel.has(b.id));
     state.ksel.clear();

@@ -2,6 +2,7 @@
 //! The Tauri shell (`src-tauri`) only forwards calls here, so all of this
 //! is tested with `cargo test -p liseuse-core` on any OS.
 
+pub mod authors;
 pub mod formats;
 pub mod kindle;
 pub mod library;

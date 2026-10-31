@@ -24,6 +24,7 @@ test("book names and renaming rule", () => {
   assert.equal(shouldRename("pg4650-images", "Candide - Voltaire"), true);
   assert.equal(shouldRename("Mon livre - Moi", "Candide - Voltaire"), false, "a name with an author is kept");
   assert.equal(shouldRename("candide - voltaire", "Candide - Voltaire"), false);
+  assert.equal(shouldRename("Voltaire/Candide", "Candide - Voltaire"), false, "already in its author folder");
   assert.equal(shouldRename("x", ""), false);
   assert.equal(shouldRename("x", "Livre"), false);
 });

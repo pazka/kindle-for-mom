@@ -1,21 +1,32 @@
-//! Mom's library: plain files in `Documents\Mes livres`, plus a hidden
-//! `.liseuse` folder the app can always rebuild:
+//! Mom's library: plain files in `Documents\Mes livres`, one folder per
+//! author like on her Kindle, plus a hidden `.liseuse` folder the app can
+//! always rebuild (ADR-0003, ADR-0006):
 //!
 //! ```text
 //! Mes livres/
-//!   Le Comte de Monte-Cristo - Alexandre Dumas.epub   ← her book (master copy)
-//!   Recettes de grand-mère.pdf
-//!   .liseuse/
-//!     kindle/<nom>.mobi        ← the copy made for the Kindle (EPUB only)
-//!     kindle/<nom>.error       ← why it couldn't be made (e.g. "drm")
-//!     positions/<nom>.sdr/     ← reading position saved when a book leaves the Kindle
-//!     corbeille/<id>/          ← deleted books, restorable for 30 days
-//!     state.json               ← small app state (downloads already offered, guide progress)
+//!   Dumas, Alexandre/
+//!     Le Comte de Monte-Cristo.epub   ← her book (master copy)
+//!   Recettes de grand-mère.pdf        ← no author: at the top
+//!   .liseuse/                         ← same sub-folders as the books
+//!     kindle/<id>.mobi                ← the copy made for the Kindle (EPUB only)
+//!     kindle/<id>.error               ← why it couldn't be made (e.g. "drm")
+//!     positions/<id>.sdr/             ← reading position (older Kindles: a folder)
+//!     positions/<id>.mbp, .apnx, …    ← reading position (Kindle 4: files next to the book)
+//!     positions/<id>.kindle-path      ← where the book was on the Kindle, to put it back there
+//!     corbeille/<n>/                  ← deleted books, restorable for 30 days
+//!     state.json                      ← small app state (downloads already offered, guide progress)
 //! ```
+//!
+//! A book's id is its path in `Mes livres` without extension, with `/`
+//! ("Dumas, Alexandre/Le Comte de Monte-Cristo"). On the Kindle, a book is
+//! identified by its path in `documents` ("Dumas, Alexandre/Le Comte de
+//! Monte-Cristo.mobi"). The same book on both sides is found by its path
+//! or by title + author (`authors::book_key`).
 //!
 //! The files are the truth: if the app disappears, the books are still
 //! ordinary files she (or you) can copy by hand.
 
+use crate::authors::{self, book_key};
 use crate::formats::{Format, Light};
 use crate::kindle::Kindle;
 use crate::mobi;
@@ -23,7 +34,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 use std::fs;
 use std::io;
-use std::path::{Path, PathBuf};
+use std::path::{Path, PathBuf, MAIN_SEPARATOR_STR};
 use std::sync::Mutex;
 use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -35,18 +46,28 @@ pub const DEFAULT_BOOK_SIZE: u64 = 700 * 1024;
 const TRASH_DAYS: u64 = 30;
 const PROTECTED_ADVICE: &str =
     "Acheté sur Amazon : ce livre se lit seulement sur votre liseuse. Gardez-le ici, c'est votre copie de sauvegarde.";
-/// Files on the Kindle that are not hers to move around.
+/// Files and folders on the Kindle that are not hers to move around
+/// (notes, dictionaries, screenshots), matched anywhere in the name.
 const KINDLE_PROTECTED: &[&str] = &[
     "clippings",
     "coupures",
+    "mes extraits",
+    "screen_shot",
     "dictionar",
+    "dictionnaire",
     "wörterbuch",
     "diccionario",
 ];
+/// Files the Kindle 4 writes next to a book (last page read, notes, page
+/// numbers…). They have the book's name and travel with it.
+pub const SIDECARS: &[&str] = &["mbp", "apnx", "eal", "ea", "han", "pdr"];
+/// documents/Auteur/Série/livre is the deepest the app looks.
+const KINDLE_DEPTH: usize = 3;
 
 #[derive(Debug, Clone, Serialize)]
 pub struct PcBook {
-    /// File name without extension; stable id while the file isn't renamed.
+    /// Path in the library without extension ("Auteur/Titre"); stable while
+    /// the file isn't renamed.
     pub id: String,
     pub file_name: String,
     pub title: String,
@@ -66,14 +87,20 @@ pub struct PcBook {
     pub on_kindle: bool,
     /// Bought on Amazon with copy protection: fine on her Kindle, useless to share.
     pub protected: bool,
-    /// File name it has (or will have) in the Kindle's `documents` folder.
+    /// Path it has (or will have) in the Kindle's `documents` folder.
     pub kindle_name: String,
+    /// The book on the Kindle that is this one (`KindleBook::id`), if plugged in.
+    pub kindle_id: Option<String>,
+    /// `kindle_name` is where the book really was on the Kindle (it left
+    /// from there), not just where it would go.
+    #[serde(skip)]
+    remembered: bool,
     pub added: u64,
 }
 
 #[derive(Debug, Clone, Serialize)]
 pub struct KindleBook {
-    /// File name in `documents`.
+    /// Path in `documents`, with `/` ("Hugo, Victor/Les Miserables.mobi").
     pub id: String,
     pub title: String,
     pub author: Option<String>,
@@ -285,6 +312,69 @@ fn eq_ci(a: &str, b: &str) -> bool {
     a.to_lowercase() == b.to_lowercase()
 }
 
+/// `base` + "Auteur/Titre" + `suffix`, with the platform's separator.
+fn under(base: &Path, id: &str, suffix: &str) -> PathBuf {
+    base.join(format!("{id}{suffix}").replace('/', MAIN_SEPARATOR_STR))
+}
+
+/// A path in `documents` the UI may name: relative, no `..`, no hidden part.
+fn valid_rel(rel: &str) -> bool {
+    !rel.is_empty()
+        && !rel.contains('\\')
+        && rel.split('/').count() <= KINDLE_DEPTH
+        && rel
+            .split('/')
+            .all(|c| !c.is_empty() && !c.starts_with('.') && !c.contains(':'))
+}
+
+fn protected_name(name: &str) -> bool {
+    let lower = name.to_lowercase();
+    KINDLE_PROTECTED.iter().any(|w| lower.contains(w))
+}
+
+/// Remove `from`'s parent folders while they are empty, up to `stop`.
+fn remove_empty_parents(from: &Path, stop: &Path) {
+    let mut d = from.parent();
+    while let Some(dir) = d {
+        if dir == stop || !dir.starts_with(stop) || fs::remove_dir(dir).is_err() {
+            break;
+        }
+        d = dir.parent();
+    }
+}
+
+fn create_parent(p: &Path) -> io::Result<()> {
+    match p.parent() {
+        Some(d) => fs::create_dir_all(d),
+        None => Ok(()),
+    }
+}
+
+/// Mark PC and Kindle books that are the same book: back at the place it
+/// left from, or else same title + author. A file that only happens to have
+/// the name the book would get is another book.
+fn link(pc: &mut [PcBook], kindle: &mut [KindleBook]) {
+    let mut by_path: HashMap<String, usize> = HashMap::new();
+    let mut by_key: HashMap<String, usize> = HashMap::new();
+    for (i, k) in kindle.iter().enumerate() {
+        by_path.insert(k.id.to_lowercase(), i);
+        by_key
+            .entry(book_key(&k.title, k.author.as_deref()))
+            .or_insert(i);
+    }
+    for b in pc.iter_mut() {
+        let hit = by_path
+            .get(&b.kindle_name.to_lowercase())
+            .filter(|_| b.remembered)
+            .or_else(|| by_key.get(&book_key(&b.title, b.author.as_deref())));
+        if let Some(&i) = hit {
+            b.on_kindle = true;
+            b.kindle_id = Some(kindle[i].id.clone());
+            kindle[i].on_pc = true;
+        }
+    }
+}
+
 pub struct Library {
     root: PathBuf,
     /// Titles read from Kindle files, keyed by path + size + mtime: with
@@ -347,59 +437,122 @@ impl Library {
 
     // ------------------------------------------------------------ PC side
 
-    fn book_files(&self) -> Vec<(PathBuf, Format, fs::Metadata)> {
+    /// Every book file: at the top of the library and one folder down
+    /// (author folders). Returns (path, id, format, metadata).
+    fn book_files(&self) -> Vec<(PathBuf, String, Format, fs::Metadata)> {
+        let mut v = Vec::new();
         let Ok(rd) = fs::read_dir(&self.root) else {
-            return vec![];
+            return v;
         };
-        let mut v: Vec<_> = rd
-            .flatten()
-            .filter_map(|e| {
-                let p = e.path();
-                let m = e.metadata().ok()?;
-                if !m.is_file() || p.file_name()?.to_str()?.starts_with('.') {
-                    return None;
+        for e in rd.flatten() {
+            let name = e.file_name().to_string_lossy().into_owned();
+            if name.starts_with('.') {
+                continue;
+            }
+            let Ok(m) = e.metadata() else { continue };
+            if m.is_dir() {
+                let Ok(sub) = fs::read_dir(e.path()) else {
+                    continue;
+                };
+                for f in sub.flatten() {
+                    let fname = f.file_name().to_string_lossy().into_owned();
+                    let Ok(fm) = f.metadata() else { continue };
+                    if fname.starts_with('.') || !fm.is_file() {
+                        continue;
+                    }
+                    let p = f.path();
+                    if let Some(format) = Format::from_path(&p) {
+                        let stem = p.file_stem().unwrap_or_default().to_string_lossy();
+                        v.push((p.clone(), format!("{name}/{stem}"), format, fm));
+                    }
                 }
-                Some((p.clone(), Format::from_path(&p)?, m))
-            })
-            .collect();
-        v.sort_by_key(|(p, _, _)| p.file_name().map(|n| n.to_string_lossy().to_lowercase()));
+            } else if m.is_file() {
+                let p = e.path();
+                if let Some(format) = Format::from_path(&p) {
+                    let stem = p
+                        .file_stem()
+                        .unwrap_or_default()
+                        .to_string_lossy()
+                        .into_owned();
+                    v.push((p, stem, format, m));
+                }
+            }
+        }
+        v.sort_by_key(|(_, id, _, _)| id.to_lowercase());
         v
     }
 
     fn find_file(&self, id: &str) -> Option<(PathBuf, Format)> {
         self.book_files()
             .into_iter()
-            .find(|(p, _, _)| {
-                p.file_stem()
-                    .is_some_and(|s| eq_ci(&s.to_string_lossy(), id))
-            })
-            .map(|(p, f, _)| (p, f))
+            .find(|(_, i, _, _)| eq_ci(i, id))
+            .map(|(p, _, f, _)| (p, f))
     }
 
-    fn kindle_name(stem: &str, f: Format) -> String {
-        let ext = if f.kindle_native() { f.ext() } else { "mobi" };
-        format!("{stem}.{ext}")
+    fn cache_path(&self, id: &str) -> PathBuf {
+        under(&self.cache_dir(), id, ".mobi")
     }
-
-    fn cache_path(&self, stem: &str) -> PathBuf {
-        self.cache_dir().join(format!("{stem}.mobi"))
+    fn error_path(&self, id: &str) -> PathBuf {
+        under(&self.cache_dir(), id, ".error")
     }
-    fn error_path(&self, stem: &str) -> PathBuf {
-        self.cache_dir().join(format!("{stem}.error"))
+    fn kindle_path_file(&self, id: &str) -> PathBuf {
+        under(&self.positions_dir(), id, ".kindle-path")
+    }
+    /// Everything the app keeps about a book besides the book itself.
+    fn extras(&self, id: &str) -> Vec<PathBuf> {
+        let mut v = vec![
+            self.cache_path(id),
+            self.error_path(id),
+            under(&self.positions_dir(), id, ".sdr"),
+            self.kindle_path_file(id),
+        ];
+        v.extend(
+            SIDECARS
+                .iter()
+                .map(|e| under(&self.positions_dir(), id, &format!(".{e}"))),
+        );
+        v
     }
 
     pub fn pc_books(&self) -> Vec<PcBook> {
         self.book_files()
             .into_iter()
-            .map(|(p, f, m)| {
-                let stem = p.file_stem().unwrap_or_default().to_string_lossy().into_owned();
-                let (title, author) = split_title(&stem);
+            .map(|(p, id, f, m)| {
+                let (folder, stem) = match id.split_once('/') {
+                    Some((a, s)) => (Some(a.to_string()), s.to_string()),
+                    None => (None, id.clone()),
+                };
+                let (mut title, mut author) = match &folder {
+                    Some(a) => (stem.clone(), Some(a.clone())),
+                    None => split_title(&stem),
+                };
+                let meta = if f.palmdb() {
+                    self.cached_meta(&p, &m)
+                } else {
+                    None
+                };
+                if let Some(mm) = &meta {
+                    if let Some(t) = mm.title.clone().filter(|t| !t.is_empty()) {
+                        title = t;
+                        author = mm.author.clone().or(author);
+                    }
+                }
                 let size = m.len();
                 let (light, advice) = f.advice(size);
+                let kext = if f.kindle_native() { f.ext() } else { "mobi" };
+                let remembered = fs::read_to_string(self.kindle_path_file(&id))
+                    .ok()
+                    .map(|s| s.trim().to_string())
+                    .filter(|s| valid_rel(s));
+                let kindle_name = remembered
+                    .clone()
+                    .unwrap_or_else(|| authors::kindle_path(&title, author.as_deref(), kext));
                 let mut b = PcBook {
-                    kindle_name: Self::kindle_name(&stem, f),
-                    id: stem.clone(),
+                    kindle_name,
+                    kindle_id: None,
+                    remembered: remembered.is_some(),
                     file_name: p.file_name().unwrap_or_default().to_string_lossy().into_owned(),
+                    id,
                     title,
                     author,
                     format: f,
@@ -414,15 +567,15 @@ impl Library {
                     protected: false,
                     added: mtime_secs(&m),
                 };
-                if f.palmdb() && self.cached_meta(&p, &m).is_some_and(|mm| mm.drm) {
+                if meta.is_some_and(|mm| mm.drm) {
                     b.protected = true;
                     b.advice = PROTECTED_ADVICE.into();
                 }
                 if !f.kindle_native() {
-                    if let Ok(cm) = fs::metadata(self.cache_path(&stem)) {
+                    if let Ok(cm) = fs::metadata(self.cache_path(&b.id)) {
                         b.ready = true;
                         b.kindle_size = cm.len();
-                    } else if let Ok(code) = fs::read_to_string(self.error_path(&stem)) {
+                    } else if let Ok(code) = fs::read_to_string(self.error_path(&b.id)) {
                         let code = code.trim().to_string();
                         b.light = Light::Rouge;
                         b.advice = if code == "drm" {
@@ -449,30 +602,48 @@ impl Library {
             .collect()
     }
 
-    fn existing_stems(&self) -> HashSet<String> {
-        self.book_files()
-            .into_iter()
-            .filter_map(|(p, _, _)| Some(p.file_stem()?.to_string_lossy().to_lowercase()))
-            .collect()
+    /// Where a book called "Titre - Auteur" goes in the library:
+    /// "Nom, Prénom/Titre", or "Titre" when there is no author.
+    fn place(name: &str) -> String {
+        let (title, author) = split_title(name.trim());
+        let file = safe_name(&title);
+        match author
+            .map(|a| authors::author_sort(&a))
+            .filter(|a| !a.trim().is_empty())
+        {
+            Some(a) => format!("{}/{file}", safe_name(&a)),
+            None => file,
+        }
     }
 
-    fn unique_stem(&self, wanted: &str) -> String {
-        let taken = self.existing_stems();
-        let base = safe_name(wanted);
+    /// A free id for `name`, with " (2)", " (3)"… if the place is taken.
+    fn unique_id(&self, name: &str) -> String {
+        let taken: HashSet<String> = self
+            .book_files()
+            .into_iter()
+            .map(|(_, id, _, _)| id.to_lowercase())
+            .collect();
+        let base = Self::place(name);
         if !taken.contains(&base.to_lowercase()) {
             return base;
         }
         (2..)
             .map(|n| format!("{base} ({n})"))
             .find(|s| !taken.contains(&s.to_lowercase()))
-            .unwrap()
+            .unwrap_or(base)
     }
 
-    /// Add a book from bytes; returns its id.
+    fn file_of(&self, id: &str, format: Format) -> PathBuf {
+        under(&self.root, id, &format!(".{}", format.ext()))
+    }
+
+    /// Add a book from bytes; `name` is "Titre - Auteur". Returns its id.
     pub fn add_bytes(&self, name: &str, format: Format, bytes: &[u8]) -> Result<String, OpError> {
-        let stem = self.unique_stem(name);
-        write_durable(&self.root.join(format!("{stem}.{}", format.ext())), bytes)?;
-        Ok(stem)
+        let id = self.unique_id(name);
+        let to = self.file_of(&id, format);
+        create_parent(&to)?;
+        write_durable(&to, bytes)?;
+        Ok(id)
     }
 
     /// Add a book from a file on disk (a download, a dropped file). The name
@@ -502,9 +673,11 @@ impl Library {
                 }
             }
         };
-        let stem = self.unique_stem(&wanted);
-        copy_durable(path, &self.root.join(format!("{stem}.{}", format.ext())))?;
-        Ok(stem)
+        let id = self.unique_id(&wanted);
+        let to = self.file_of(&id, format);
+        create_parent(&to)?;
+        copy_durable(path, &to)?;
+        Ok(id)
     }
 
     pub fn read_book(&self, id: &str) -> Result<Vec<u8>, OpError> {
@@ -515,36 +688,36 @@ impl Library {
     pub fn save_kindle_copy(&self, id: &str, mobi: &[u8]) -> Result<(), OpError> {
         self.find_file(id).ok_or_else(missing)?;
         fs::remove_file(self.error_path(id)).ok();
-        write_durable(&self.cache_path(id), mobi)?;
+        let to = self.cache_path(id);
+        create_parent(&to)?;
+        write_durable(&to, mobi)?;
         Ok(())
     }
 
-    /// Rename a book (and its Kindle copy and saved reading position).
-    /// Used after converting an EPUB with an unhelpful file name such as
-    /// "pg17989-images". Returns the new id. A book already on the Kindle
-    /// keeps its old name there until it comes back.
+    /// Rename a book (and everything the app keeps about it). Used after
+    /// converting an EPUB with an unhelpful file name such as
+    /// "pg17989-images"; `name` is "Titre - Auteur", so the book also moves
+    /// to its author's folder. Returns the new id.
     pub fn rename(&self, id: &str, name: &str) -> Result<String, OpError> {
         let (p, f) = self.find_file(id).ok_or_else(missing)?;
-        let stem = p
-            .file_stem()
-            .unwrap_or_default()
-            .to_string_lossy()
-            .into_owned();
-        if safe_name(name) == stem {
-            return Ok(stem);
+        let old = self
+            .book_files()
+            .into_iter()
+            .find(|(bp, _, _, _)| *bp == p)
+            .map(|(_, i, _, _)| i)
+            .ok_or_else(missing)?;
+        if Self::place(name) == old {
+            return Ok(old);
         }
-        let new = self.unique_stem(name);
-        fs::rename(&p, self.root.join(format!("{new}.{}", f.ext())))?;
-        for (old, newp) in [
-            (self.cache_path(&stem), self.cache_path(&new)),
-            (self.error_path(&stem), self.error_path(&new)),
-            (
-                self.positions_dir().join(format!("{stem}.sdr")),
-                self.positions_dir().join(format!("{new}.sdr")),
-            ),
-        ] {
-            if old.exists() {
-                fs::rename(old, newp).ok();
+        let new = self.unique_id(name);
+        let to = self.file_of(&new, f);
+        create_parent(&to)?;
+        fs::rename(&p, &to)?;
+        remove_empty_parents(&p, &self.root);
+        for (from, to) in self.extras(&old).into_iter().zip(self.extras(&new)) {
+            if from.exists() && create_parent(&to).is_ok() {
+                fs::rename(&from, to).ok();
+                remove_empty_parents(&from, &self.meta_dir());
             }
         }
         Ok(new)
@@ -557,59 +730,86 @@ impl Library {
             .filter(|c| c.is_ascii_alphanumeric() || *c == '_')
             .take(32)
             .collect();
-        fs::write(self.error_path(id), code)?;
+        let to = self.error_path(id);
+        create_parent(&to)?;
+        fs::write(to, code)?;
         Ok(())
     }
 
     // ------------------------------------------------------------ Kindle side
 
-    pub fn kindle_books(&self, k: &Kindle) -> Vec<KindleBook> {
-        let pc_names: HashSet<String> = self
-            .pc_books()
-            .into_iter()
-            .map(|b| b.kindle_name.to_lowercase())
-            .collect();
-        let Ok(rd) = fs::read_dir(k.documents()) else {
-            return vec![];
-        };
-        let mut v: Vec<KindleBook> = rd
-            .flatten()
-            .filter_map(|e| {
-                let p = e.path();
-                let m = e.metadata().ok()?;
-                let name = p.file_name()?.to_str()?.to_string();
-                let lower = name.to_lowercase();
-                if !m.is_file()
-                    || name.starts_with('.')
-                    || KINDLE_PROTECTED.iter().any(|w| lower.contains(w))
-                {
-                    return None;
-                }
-                let format = Format::from_path(&p).filter(|f| f.kindle_native())?;
-                let stem = p.file_stem()?.to_string_lossy().into_owned();
-                let meta = if format.palmdb() {
-                    self.cached_meta(&p, &m)
-                } else {
-                    None
-                };
-                let protected = meta.as_ref().is_some_and(|m| m.drm);
-                let (title, author) = match meta.and_then(|m| m.title.map(|t| (t, m.author))) {
-                    Some((t, a)) => (t, a),
-                    None => split_title(&stem),
-                };
-                Some(KindleBook {
-                    protected,
-                    on_pc: pc_names.contains(&lower),
-                    id: name,
-                    title,
-                    author,
-                    format,
-                    size: m.len(),
-                })
-            })
-            .collect();
-        v.sort_by_key(|b| b.title.to_lowercase());
+    /// Her books on the Kindle, in author folders or at the top of
+    /// `documents`, without notes, dictionaries or reading-position files.
+    fn scan_kindle(&self, k: &Kindle) -> Vec<KindleBook> {
+        let mut v = Vec::new();
+        self.scan_dir(&k.documents(), "", None, &mut v);
+        v.sort_by_cached_key(|b| {
+            (
+                authors::fold(&authors::author_sort(b.author.as_deref().unwrap_or(""))),
+                authors::fold(&b.title),
+            )
+        });
         v
+    }
+
+    fn scan_dir(&self, dir: &Path, prefix: &str, folder: Option<&str>, out: &mut Vec<KindleBook>) {
+        let Ok(rd) = fs::read_dir(dir) else { return };
+        for e in rd.flatten() {
+            let name = e.file_name().to_string_lossy().into_owned();
+            if name.starts_with('.') || protected_name(&name) {
+                continue;
+            }
+            let Ok(m) = e.metadata() else { continue };
+            let p = e.path();
+            let rel = format!("{prefix}{name}");
+            if m.is_dir() {
+                let depth = rel.split('/').count();
+                if !name.to_lowercase().ends_with(".sdr") && depth < KINDLE_DEPTH {
+                    // the author is the top folder ("Hugo, Victor/Série/…")
+                    let author_folder = folder.unwrap_or(&name).to_string();
+                    self.scan_dir(&p, &format!("{rel}/"), Some(&author_folder), out);
+                }
+                continue;
+            }
+            let Some(format) = Format::from_path(&p).filter(|f| f.kindle_native()) else {
+                continue;
+            };
+            let stem = p
+                .file_stem()
+                .unwrap_or_default()
+                .to_string_lossy()
+                .into_owned();
+            let meta = if format.palmdb() {
+                self.cached_meta(&p, &m)
+            } else {
+                None
+            };
+            let protected = meta.as_ref().is_some_and(|m| m.drm);
+            let (path_title, path_author) = match folder {
+                Some(a) => (stem.clone(), Some(a.to_string())),
+                None => split_title(&stem),
+            };
+            let (title, author) = match meta.and_then(|m| m.title.map(|t| (t, m.author))) {
+                Some((t, a)) if !t.is_empty() => (t, a.or(path_author)),
+                _ => (path_title, path_author),
+            };
+            out.push(KindleBook {
+                id: rel,
+                title,
+                author,
+                format,
+                size: m.len(),
+                on_pc: false,
+                protected,
+            });
+        }
+    }
+
+    pub fn kindle_books(&self, k: &Kindle) -> Vec<KindleBook> {
+        let mut pc = self.pc_books();
+        let mut kb = self.scan_kindle(k);
+        link(&mut pc, &mut kb);
+        kb
     }
 
     fn cached_meta(&self, p: &Path, m: &fs::Metadata) -> Option<mobi::MobiMeta> {
@@ -641,17 +841,8 @@ impl Library {
     pub fn overview(&self, k: Option<&Kindle>) -> Overview {
         let mut pc = self.pc_books();
         let kindle = k.map(|k| {
-            let books = self.kindle_books(k);
-            let on: HashSet<String> = fs::read_dir(k.documents())
-                .map(|rd| {
-                    rd.flatten()
-                        .map(|e| e.file_name().to_string_lossy().to_lowercase())
-                        .collect()
-                })
-                .unwrap_or_default();
-            for b in &mut pc {
-                b.on_kindle = on.contains(&b.kindle_name.to_lowercase());
-            }
+            let mut books = self.scan_kindle(k);
+            link(&mut pc, &mut books);
             kindle_side(k.clone(), books)
         });
         Overview {
@@ -661,16 +852,51 @@ impl Library {
         }
     }
 
-    /// Put a book from the PC onto the Kindle (with its saved reading position).
+    /// The author folder already on the Kindle for this author ("Hugo,
+    /// Victor" for "Victor Hugo"), so new books join her existing folders.
+    fn existing_author_folder(docs: &Path, wanted: &str) -> Option<String> {
+        let (folder, _) = wanted.split_once('/')?;
+        let words = authors::author_words(folder);
+        fs::read_dir(docs)
+            .ok()?
+            .flatten()
+            .filter(|e| e.file_type().is_ok_and(|t| t.is_dir()))
+            .map(|e| e.file_name().to_string_lossy().into_owned())
+            .find(|n| !n.starts_with('.') && authors::author_words(n) == words)
+    }
+
+    /// A free path in `documents` for `wanted`, with " (2)"… if taken.
+    fn free_kindle_rel(docs: &Path, wanted: &str) -> String {
+        let wanted = match Self::existing_author_folder(docs, wanted) {
+            Some(f) => format!("{f}/{}", wanted.split_once('/').map_or(wanted, |(_, r)| r)),
+            None => wanted.to_string(),
+        };
+        if !under(docs, &wanted, "").exists() {
+            return wanted;
+        }
+        let (stem, ext) = wanted.rsplit_once('.').unwrap_or((&wanted, ""));
+        (2..)
+            .map(|n| format!("{stem} ({n}).{ext}"))
+            .find(|r| !under(docs, r, "").exists())
+            .unwrap_or(wanted.clone())
+    }
+
+    /// Put a book from the PC onto the Kindle, in its author's folder, with
+    /// its saved reading position. Never replaces a file already there.
     /// `k` must be fresh (the shell calls `kindle::find()` just before), so its
     /// `free_bytes` is the space left right now; tests pass a Kindle with a
     /// chosen free space.
     pub fn put_on_kindle(&self, id: &str, k: &Kindle) -> Result<(), OpError> {
-        let book = self
-            .pc_books()
+        let mut pc = self.pc_books();
+        let mut kb = self.scan_kindle(k);
+        link(&mut pc, &mut kb);
+        let book = pc
             .into_iter()
             .find(|b| eq_ci(&b.id, id))
             .ok_or_else(missing)?;
+        if book.on_kindle {
+            return Ok(());
+        }
         if let Some(code) = &book.error {
             return Err(OpError::new(
                 if code == "drm" { "drm" } else { "convert" },
@@ -684,14 +910,11 @@ impl Library {
             ));
         }
         let src = if book.format.kindle_native() {
-            self.root.join(&book.file_name)
+            self.file_of(&book.id, book.format)
         } else {
             self.cache_path(&book.id)
         };
-        let docs = k.documents();
-        let dst = docs.join(&book.kindle_name);
-        let already = fs::metadata(&dst).map(|m| m.len()).unwrap_or(0);
-        let needed = book.kindle_size.saturating_sub(already) + KINDLE_MARGIN;
+        let needed = book.kindle_size + KINDLE_MARGIN;
         let free = k.free_bytes;
         if needed > free {
             return Err(OpError {
@@ -701,101 +924,151 @@ impl Library {
                 free: Some(free),
             });
         }
+        let docs = k.documents();
+        let rel = Self::free_kindle_rel(&docs, &book.kindle_name);
+        let dst = under(&docs, &rel, "");
+        create_parent(&dst)?;
         copy_durable(&src, &dst)?;
-        let saved = self.positions_dir().join(format!("{}.sdr", book.id));
-        let sdr = docs.join(format!("{}.sdr", book.id));
-        if saved.is_dir() && !sdr.exists() {
-            copy_dir(&saved, &sdr).ok(); // a lost reading position must not fail the copy
-        }
+        self.restore_position(&book.id, &dst); // a lost position must not fail the copy
         Ok(())
     }
 
-    /// Take a book off the Kindle. If the PC doesn't have it yet it is saved
-    /// in the library first, and only then removed from the Kindle.
-    /// Returns the id of the book on the PC.
-    pub fn take_from_kindle(&self, kindle_file: &str, k: &Kindle) -> Result<String, OpError> {
-        if kindle_file.contains(['/', '\\']) || kindle_file.starts_with('.') {
-            return Err(missing());
-        }
-        let docs = k.documents();
-        let src = docs.join(kindle_file);
-        if !src.is_file() {
-            return Err(missing());
-        }
-        let kb = self
-            .kindle_books(k)
-            .into_iter()
-            .find(|b| eq_ci(&b.id, kindle_file))
-            .ok_or_else(missing)?;
-        let kstem = src
-            .file_stem()
-            .unwrap_or_default()
-            .to_string_lossy()
-            .into_owned();
-        let pc = self
-            .pc_books()
-            .into_iter()
-            .find(|b| eq_ci(&b.kindle_name, kindle_file));
-        let id = match pc {
-            Some(b) => b.id,
-            None => {
-                let name = if kb.title != kstem || kb.author.is_some() {
-                    display_name(&kb.title, kb.author.as_deref())
-                } else {
-                    kstem.clone()
-                };
-                let id = self.add_path(&src, Some(&name))?;
-                let saved = self.root.join(format!("{id}.{}", kb.format.ext()));
-                if fs::metadata(&saved).map(|m| m.len()).unwrap_or(0) != kb.size {
-                    return Err(OpError::new(
-                        "io",
-                        "La copie sur l'ordinateur a échoué : le livre reste sur la liseuse.",
-                    ));
-                }
-                id
-            }
+    /// Copy the saved reading position next to the book on the Kindle,
+    /// renamed after it, without replacing anything the Kindle has.
+    fn restore_position(&self, id: &str, dst: &Path) {
+        let (Some(dir), Some(kstem)) = (dst.parent(), dst.file_stem()) else {
+            return;
         };
-        let sdr = docs.join(format!("{kstem}.sdr"));
+        let kstem = kstem.to_string_lossy();
+        let sdr = under(&self.positions_dir(), id, ".sdr");
+        let target = dir.join(format!("{kstem}.sdr"));
+        if sdr.is_dir() && !target.exists() {
+            copy_dir(&sdr, &target).ok();
+        }
+        for ext in SIDECARS {
+            let saved = under(&self.positions_dir(), id, &format!(".{ext}"));
+            let target = dir.join(format!("{kstem}.{ext}"));
+            if saved.is_file() && !target.exists() {
+                copy_durable(&saved, &target).ok();
+            }
+        }
+    }
+
+    /// Move the reading position of a book leaving the Kindle into the
+    /// library, and remember where the book was.
+    fn save_position(&self, id: &str, src: &Path, rel: &str) {
+        let (Some(dir), Some(kstem)) = (src.parent(), src.file_stem()) else {
+            return;
+        };
+        let kstem = kstem.to_string_lossy();
+        let sdr = dir.join(format!("{kstem}.sdr"));
         if sdr.is_dir() {
-            let saved = self.positions_dir().join(format!("{id}.sdr"));
+            let saved = under(&self.positions_dir(), id, ".sdr");
             if saved.exists() {
                 fs::remove_dir_all(&saved).ok();
             }
-            copy_dir(&sdr, &saved).ok();
-            fs::remove_dir_all(&sdr).ok();
+            if create_parent(&saved).is_ok() && copy_dir(&sdr, &saved).is_ok() {
+                fs::remove_dir_all(&sdr).ok();
+            }
         }
+        for ext in SIDECARS {
+            let side = dir.join(format!("{kstem}.{ext}"));
+            if !side.is_file() {
+                continue;
+            }
+            let saved = under(&self.positions_dir(), id, &format!(".{ext}"));
+            if create_parent(&saved).is_ok() && copy_durable(&side, &saved).is_ok() {
+                fs::remove_file(&side).ok();
+            }
+        }
+        let kp = self.kindle_path_file(id);
+        if create_parent(&kp).is_ok() {
+            write_durable(&kp, rel.as_bytes()).ok();
+        }
+    }
+
+    /// Make sure a book on the Kindle also exists on the PC (copied into
+    /// its author's folder if needed). The Kindle is not changed. Returns
+    /// the id of the book on the PC.
+    pub fn save_to_pc(&self, kindle_file: &str, k: &Kindle) -> Result<String, OpError> {
+        if !valid_rel(kindle_file) {
+            return Err(missing());
+        }
+        let src = under(&k.documents(), kindle_file, "");
+        if !src.is_file() {
+            return Err(missing());
+        }
+        let mut pc = self.pc_books();
+        let mut kb = self.scan_kindle(k);
+        link(&mut pc, &mut kb);
+        let book = kb
+            .into_iter()
+            .find(|b| eq_ci(&b.id, kindle_file))
+            .ok_or_else(missing)?;
+        if let Some(b) = pc.iter().find(|b| {
+            b.kindle_id
+                .as_deref()
+                .is_some_and(|i| eq_ci(i, kindle_file))
+        }) {
+            return Ok(b.id.clone());
+        }
+        let id = self.add_path(
+            &src,
+            Some(&display_name(&book.title, book.author.as_deref())),
+        )?;
+        let copied = fs::metadata(self.file_of(&id, book.format)).map_or(0, |m| m.len());
+        if copied != book.size {
+            return Err(OpError::new(
+                "io",
+                "La copie sur l'ordinateur a échoué : le livre reste sur la liseuse.",
+            ));
+        }
+        let kp = self.kindle_path_file(&id);
+        create_parent(&kp)?;
+        write_durable(&kp, book.id.as_bytes())?;
+        Ok(id)
+    }
+
+    /// Take a book off the Kindle. If the PC doesn't have it yet it is saved
+    /// in the library first, and only then removed from the Kindle, with its
+    /// reading-position files. Returns the id of the book on the PC.
+    pub fn take_from_kindle(&self, kindle_file: &str, k: &Kindle) -> Result<String, OpError> {
+        let id = self.save_to_pc(kindle_file, k)?;
+        let docs = k.documents();
+        let src = under(&docs, kindle_file, "");
+        self.save_position(&id, &src, kindle_file);
         fs::remove_file(&src)?;
+        remove_empty_parents(&src, &docs);
         Ok(id)
     }
 
     // ------------------------------------------------------------ trash
 
-    /// Move a book (and its Kindle copy and reading position) to the trash.
+    /// Move a book (and everything the app keeps about it) to the trash.
     pub fn delete(&self, id: &str) -> Result<String, OpError> {
         let (p, _) = self.find_file(id).ok_or_else(missing)?;
-        let stem = p
-            .file_stem()
-            .unwrap_or_default()
-            .to_string_lossy()
-            .into_owned();
-        let tid = format!("{}-{}", now_secs(), safe_name(&stem));
+        let id = self
+            .book_files()
+            .into_iter()
+            .find(|(bp, _, _, _)| *bp == p)
+            .map(|(_, i, _, _)| i)
+            .ok_or_else(missing)?;
+        let (folder, stem) = match id.rsplit_once('/') {
+            Some((f, s)) => (f, s),
+            None => ("", id.as_str()),
+        };
+        let tid = format!("{}-{}", now_secs(), safe_name(stem));
         let t = self.trash_dir().join(&tid);
         fs::create_dir_all(&t)?;
-        move_path(&p, &t.join(p.file_name().unwrap()))?;
-        for extra in [
-            self.cache_path(&stem),
-            self.error_path(&stem),
-            self.positions_dir().join(format!("{stem}.sdr")),
-        ] {
+        fs::write(t.join("dossier.txt"), folder)?;
+        let file_name = p.file_name().ok_or_else(missing)?.to_owned();
+        move_path(&p, &t.join(file_name))?;
+        remove_empty_parents(&p, &self.root);
+        for extra in self.extras(&id) {
             if extra.exists() {
-                move_path(
-                    &extra,
-                    &t.join(format!(
-                        "meta-{}",
-                        extra.file_name().unwrap().to_string_lossy()
-                    )),
-                )
-                .ok();
+                let name = extra.file_name().unwrap_or_default().to_string_lossy();
+                move_path(&extra, &t.join(format!("meta-{name}"))).ok();
+                remove_empty_parents(&extra, &self.meta_dir());
             }
         }
         Ok(tid)
@@ -806,38 +1079,63 @@ impl Library {
             return Err(missing());
         }
         let t = self.trash_dir().join(trash_id);
+        let folder = fs::read_to_string(t.join("dossier.txt")).unwrap_or_default();
+        let folder = folder.trim();
+        if !folder.is_empty() && !valid_rel(folder) {
+            return Err(missing());
+        }
+        let in_folder = |base: &Path, name: &str| {
+            if folder.is_empty() {
+                base.join(name)
+            } else {
+                under(base, &format!("{folder}/{name}"), "")
+            }
+        };
         let rd = fs::read_dir(&t).map_err(|_| missing())?;
-        let mut id = None;
+        let mut book = None;
+        let mut metas = Vec::new();
         for e in rd.flatten() {
             let name = e.file_name().to_string_lossy().into_owned();
-            let p = e.path();
-            if let Some(meta) = name.strip_prefix("meta-") {
-                let dest = if meta.ends_with(".sdr") {
-                    self.positions_dir()
-                } else {
-                    self.cache_dir()
-                }
-                .join(meta);
-                move_path(&p, &dest).ok();
+            if name == "dossier.txt" {
+                continue;
+            }
+            match name.strip_prefix("meta-") {
+                Some(meta) => metas.push((e.path(), meta.to_string())),
+                None => book = Some((e.path(), name)),
+            }
+        }
+        let (p, name) = book.ok_or_else(missing)?;
+        let dest = in_folder(&self.root, &name);
+        if dest.exists() {
+            return Err(OpError::new(
+                "exists",
+                "Un livre du même nom est déjà dans la bibliothèque.",
+            ));
+        }
+        create_parent(&dest)?;
+        move_path(&p, &dest)?;
+        for (mp, meta) in metas {
+            let base = if meta.ends_with(".mobi") || meta.ends_with(".error") {
+                self.cache_dir()
             } else {
-                let dest = self.root.join(&name);
-                if dest.exists() {
-                    return Err(OpError::new(
-                        "exists",
-                        "Un livre du même nom est déjà dans la bibliothèque.",
-                    ));
-                }
-                move_path(&p, &dest)?;
-                id = Some(
-                    p.file_stem()
-                        .unwrap_or_default()
-                        .to_string_lossy()
-                        .into_owned(),
-                );
+                self.positions_dir()
+            };
+            let to = in_folder(&base, &meta);
+            if create_parent(&to).is_ok() {
+                move_path(&mp, &to).ok();
             }
         }
         fs::remove_dir_all(&t).ok();
-        id.ok_or_else(missing)
+        let stem = Path::new(&name)
+            .file_stem()
+            .unwrap_or_default()
+            .to_string_lossy()
+            .into_owned();
+        Ok(if folder.is_empty() {
+            stem
+        } else {
+            format!("{folder}/{stem}")
+        })
     }
 
     fn purge_trash(&self) {
@@ -866,7 +1164,7 @@ impl Library {
         let lib: HashSet<(String, u64)> = self
             .book_files()
             .into_iter()
-            .filter_map(|(p, _, m)| {
+            .filter_map(|(p, _, _, m)| {
                 Some((p.file_name()?.to_string_lossy().to_lowercase(), m.len()))
             })
             .collect();
