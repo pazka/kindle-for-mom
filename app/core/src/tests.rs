@@ -604,3 +604,25 @@ fn trash_restores_into_the_author_folder() {
     assert_eq!(b.id, id);
     assert!(b.ready, "the Kindle copy came back too");
 }
+
+#[test]
+fn titles_are_remembered_between_sessions() {
+    let sb = Sandbox::new("meta-cache");
+    let k = her_kindle(&sb);
+    let first = sb.lib().overview(Some(&k)).kindle.unwrap().books;
+    let cache = sb.dir.join("Mes livres/.liseuse/titres.json");
+    assert!(cache.is_file(), "saved after the first look");
+
+    // a new session finds the same titles (from the cache)
+    let lib = sb.lib();
+    let again = lib.overview(Some(&k)).kindle.unwrap().books;
+    assert_eq!(
+        first.iter().map(|b| &b.title).collect::<Vec<_>>(),
+        again.iter().map(|b| &b.title).collect::<Vec<_>>()
+    );
+
+    // a damaged cache is ignored, never an error
+    fs::write(&cache, b"{not json").unwrap();
+    let after = sb.lib().overview(Some(&k)).kindle.unwrap().books;
+    assert_eq!(after.len(), first.len());
+}

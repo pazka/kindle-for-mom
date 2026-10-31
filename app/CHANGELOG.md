@@ -2,7 +2,16 @@
 
 All notable changes to Ma liseuse. Format: [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/), versions: [SemVer](https://semver.org/).
 
-## [0.2.0] - unreleased
+## [0.2.1] - 2026-10-31
+
+### Added
+- "Tout cocher" on the Kindle side: put every book back on the computer in one go.
+- When the Kindle is plugged in, "Liseuse détectée ! Je regarde quels livres elle contient…" shows at once instead of "Branchez votre liseuse" while its list is read.
+
+### Changed
+- Book titles are remembered between sessions, so a Kindle with 1 000 books is listed in seconds after the first time (it took about a minute every time).
+
+## [0.2.0] - 2026-10-31
 
 ### Added
 - Automatic, signed updates: a new version installs when she opens the app, with a short message, and the app reopens by itself. Without internet, the app starts as usual.

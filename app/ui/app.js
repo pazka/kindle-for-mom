@@ -129,13 +129,21 @@ async function refresh() {
   converter.enqueue(state.overview.pc.filter((b) => b.converting).map((b) => b.id));
 }
 
+/** Reading the list of 1 000 books can take a minute the first time: say so. */
+function showReading(on) {
+  $("k-reading").hidden = !on;
+  if (on) $("k-off").hidden = true;
+}
+
 async function pollKindle() {
   try {
     const k = await api.kindleStatus();
     const key = k ? `${k.root}|${k.free_bytes}` : null;
     const wasOn = Boolean(state.kindleKey);
     if (key !== state.kindleKey && !state.busy) {
+      if (k && !wasOn) showReading(true);
       await refresh();
+      showReading(false);
       if (k && !wasOn) onKindleArrived();
     }
   } finally {
@@ -395,7 +403,7 @@ function renderPc() {
 function renderKindle() {
   const side = state.overview.kindle;
   $("kindle").classList.toggle("off", !side);
-  $("k-off").hidden = Boolean(side);
+  $("k-off").hidden = Boolean(side) || !$("k-reading").hidden;
   $("k-on").hidden = !side;
   $("gauge").hidden = !side;
   $("btn-eject").hidden = !side;
@@ -415,6 +423,8 @@ function renderKindle() {
   $("k-save-go").disabled = state.busy;
   $("k-search").hidden = side.books.length < 8;
   const shown = filterKindle(side.books, state.kquery);
+  $("k-all").hidden = shown.length < 2;
+  $("k-all-box").checked = shown.length > 0 && shown.every((b) => state.ksel.has(b.id));
   $("k-list").replaceChildren(
     ...shown.map((kb) => {
       const ticked = state.ksel.has(kb.id);
@@ -508,6 +518,11 @@ async function main() {
     for (const b of shown) e.target.checked ? state.sel.add(b.id) : state.sel.delete(b.id);
     render();
   };
+  $("k-all-box").onchange = (e) => {
+    const shown = filterKindle(state.overview.kindle?.books || [], state.kquery);
+    for (const b of shown) e.target.checked ? state.ksel.add(b.id) : state.ksel.delete(b.id);
+    render();
+  };
   $("pc-bar-clear").onclick = () => { state.sel.clear(); render(); };
   $("pc-bar-go").onclick = () => {
     const books = state.overview.pc.filter((b) => state.sel.has(b.id));
@@ -531,7 +546,9 @@ async function main() {
   api.onFileDrop(addPaths, (on) => { $("drop-hint").hidden = !on; });
 
   if (await updateAtStart()) return;
+  if (await api.kindleStatus().catch(() => null)) showReading(true);
   await refresh();
+  showReading(false);
   if (state.overview.kindle) onKindleArrived();
   if (!state.ui.guideDone) openGuide();
   setTimeout(pollKindle, KINDLE_POLL_MS);

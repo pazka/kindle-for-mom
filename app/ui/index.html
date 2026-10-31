@@ -64,6 +64,10 @@
       <div id="kindle" class="kindle off">
         <div class="kindle-brand">kindle</div>
         <div class="kindle-screen">
+          <div id="k-reading" class="k-off" hidden>
+            <p><b>Liseuse détectée !</b><br>Je regarde quels livres elle contient…</p>
+            <p class="small">La première fois, cela peut prendre une minute.</p>
+          </div>
           <div id="k-off" class="k-off">
             <div class="plug-anim" aria-hidden="true"><span class="plug"></span></div>
             <p><b>Branchez votre liseuse</b><br>avec son câble sur l'ordinateur.</p>
@@ -72,6 +76,7 @@
           <div id="k-on" class="k-on" hidden>
             <div class="k-head"><span>Ma liseuse</span><span id="k-count"></span></div>
             <input id="k-search" class="k-search" type="search" placeholder="Chercher…" aria-label="Chercher dans la liseuse" hidden>
+            <label id="k-all" class="select-all k-all" hidden><input type="checkbox" id="k-all-box"> Tout cocher</label>
             <div id="k-save" class="k-save" hidden>
               <span id="k-save-text"></span>
               <button id="k-save-go" class="btn btn-blue btn-small">Tout sauvegarder sur l'ordinateur</button>
