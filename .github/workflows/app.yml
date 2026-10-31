@@ -69,8 +69,10 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with: { workspaces: app }
       - run: cargo test -p liseuse-core --locked
-      - run: cargo clippy -p liseuse --locked -- -D warnings
       - run: npm ci --ignore-scripts
+      - name: Assemble the web view (the shell embeds dist/ at compile time)
+        run: npm run build:ui
+      - run: cargo clippy -p liseuse --locked -- -D warnings
       - run: npx tauri build --ci
       - uses: actions/upload-artifact@v4
         with:
