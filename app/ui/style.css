@@ -118,6 +118,7 @@ input[type=checkbox] { width: 26px; height: 26px; accent-color: var(--green); cu
 .light.rouge { color: var(--red); }
 .badge-on { font-size: .82rem; color: var(--blue); font-weight: 700; white-space: nowrap; }
 .row-act { flex: 0 0 auto; }
+.badge-amazon { font-size: .78rem; font-weight: 700; color: #6b4a12; background: #fbe7b5; border-radius: 6px; padding: 1px 7px; }
 
 .bar { display: flex; align-items: center; gap: 12px; padding: 10px 16px; background: #fffdf6; border-top: 3px solid var(--green); box-shadow: 0 -6px 16px rgba(0,0,0,.08); }
 .bar-text { flex: 1; font-weight: 600; }

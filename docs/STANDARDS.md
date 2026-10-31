@@ -19,6 +19,7 @@ ADR.
 | D6 | The original EPUB is kept; the MOBI is a disposable copy. | `epub_lifecycle…`, `rename_moves_kindle_copy` |
 | D7 | Nothing is copied when it doesn't fit; she gets a sentence explaining what to do. | `refuses_when_kindle_is_full_and_on_drm`, e2e "a full Kindle…" |
 | D8 | Files Amazon put on the Kindle (clippings, dictionaries) are never listed or moved. | `book_only_on_kindle_is_saved_before_removal` |
+| D9 | Books bought on Amazon (DRM) are listed, kept on the PC as a backup and can go back on her Kindle, but are never offered for sharing. | `amazon_protected_books_are_listed_kept_and_flagged`, e2e "a book bought on Amazon…" |
 
 ## 2. The safety net (non-regression)
 

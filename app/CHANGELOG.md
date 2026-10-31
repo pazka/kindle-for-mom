@@ -17,6 +17,7 @@ All notable changes to Ma liseuse. Format: [Keep a Changelog](https://keepachang
 - Converted books are sized for the Kindle 4: pictures at most 600×800, greyscale, ≤ 60 KB.
 - "Envoyer à un ami": opens a ready-written email and shows the book file to drag into it.
 - Laptop screens down to 1024×600.
+- Books bought on Amazon (copy-protected AZW) are recognised: listed with their real title, kept on the PC as a backup, labelled "Acheté sur Amazon", and not offered for sharing.
 - New ebooks in Téléchargements are offered once.
 - Delete with undo (30-day trash).
 - "J'ai fini, je débranche": ejects the Kindle safely.

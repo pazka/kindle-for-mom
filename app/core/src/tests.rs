@@ -3,7 +3,7 @@
 use crate::formats::{Format, Light};
 use crate::kindle::Kindle;
 use crate::library::*;
-use crate::mobi::tests::sample_mobi;
+use crate::mobi::tests::{sample_mobi, sample_mobi_drm};
 use std::fs;
 use std::path::PathBuf;
 
@@ -233,4 +233,30 @@ fn share_link_is_a_ready_written_email() {
         .unwrap()
         .ends_with("Candide - Voltaire.epub"));
     assert_eq!(lib.share_file("nope").unwrap_err().code, "missing");
+}
+
+#[test]
+fn amazon_protected_books_are_listed_kept_and_flagged() {
+    let sb = Sandbox::new("amazon");
+    let lib = sb.lib();
+    let k = sb.kindle(500_000_000);
+    fs::write(
+        k.documents().join("B01XYZ_EBOK.azw"),
+        sample_mobi_drm("L'Étranger", "Albert Camus", true),
+    )
+    .unwrap();
+    let side = lib.overview(Some(&k)).kindle.unwrap();
+    assert_eq!(side.books[0].title, "L'Étranger");
+    assert!(side.books[0].protected);
+
+    let id = lib.take_from_kindle("B01XYZ_EBOK.azw", &k).unwrap();
+    let b = lib.pc_books().into_iter().find(|b| b.id == id).unwrap();
+    assert!(b.protected);
+    assert!(b.advice.contains("seulement sur votre liseuse"));
+    assert_eq!(b.light, Light::Vert, "still fine on her own Kindle");
+
+    assert_eq!(lib.share_file(&id).unwrap_err().code, "protected");
+
+    lib.put_on_kindle(&id, &k).unwrap();
+    assert!(lib.overview(Some(&k)).pc[0].on_kindle);
 }

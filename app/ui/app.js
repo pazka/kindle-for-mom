@@ -328,7 +328,13 @@ function renderPc() {
           "div",
           { className: "row-text" },
           el("div", { className: "row-title", textContent: b.title }),
-          el("div", { className: "row-sub" }, b.author ? el("span", { className: "author", textContent: b.author }) : null, lightBadge(b)),
+          el(
+            "div",
+            { className: "row-sub" },
+            b.author ? el("span", { className: "author", textContent: b.author }) : null,
+            lightBadge(b),
+            b.protected ? el("span", { className: "badge-amazon", textContent: "Acheté sur Amazon", title: b.advice }) : null,
+          ),
         ),
         el("div", { className: "row-act" }, rowAction(b, kindleOn)),
       );
@@ -423,10 +429,10 @@ function showDetails(book) {
     const kb = side.books.find((k) => k.id.toLowerCase() === book.kindle_name.toLowerCase());
     if (kb) actions.push(el("button", { className: "btn btn-wood", textContent: "← Enlever de la liseuse", onclick: () => { close(); takeFromKindle([kb]); } }));
   }
-  actions.push(
-    el("button", { className: "btn btn-blue", textContent: "✉ Envoyer à un ami", onclick: () => { close(); shareBook(book); } }),
-    el("button", { className: "btn btn-red", textContent: "Supprimer de l'ordinateur", onclick: () => { close(); deleteBook(book); } }),
-  );
+  if (!book.protected) {
+    actions.push(el("button", { className: "btn btn-blue", textContent: "✉ Envoyer à un ami", onclick: () => { close(); shareBook(book); } }));
+  }
+  actions.push(el("button", { className: "btn btn-red", textContent: "Supprimer de l'ordinateur", onclick: () => { close(); deleteBook(book); } }));
   $("d-actions").replaceChildren(...actions);
   $("details").hidden = false;
 }

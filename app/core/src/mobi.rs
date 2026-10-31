@@ -10,6 +10,9 @@ use std::path::Path;
 pub struct MobiMeta {
     pub title: Option<String>,
     pub author: Option<String>,
+    /// Copy-protected (Amazon / Mobipocket DRM): readable only on the
+    /// Kindle it was bought for.
+    pub drm: bool,
 }
 
 fn be32(b: &[u8], at: usize) -> Option<u32> {
@@ -34,7 +37,13 @@ pub fn parse(file: &[u8], record0: &[u8]) -> Option<MobiMeta> {
     if kind != b"BOOKMOBI" && kind != b"TEXtREAd" {
         return None;
     }
-    let mut meta = MobiMeta::default();
+    let mut meta = MobiMeta {
+        // record 0, offset 12: encryption type (0 = none, 1 = old Mobipocket, 2 = Mobipocket/Amazon)
+        drm: record0
+            .get(12..14)
+            .is_some_and(|b| u16::from_be_bytes([b[0], b[1]]) != 0),
+        ..MobiMeta::default()
+    };
     // PalmDB name (31 chars max, often truncated with underscores)
     let pdb_name = decode(file.get(0..32)?.split(|&c| c == 0).next()?, 1252);
     if record0.get(16..20) != Some(b"MOBI") {
@@ -110,7 +119,14 @@ pub(crate) mod tests {
 
     /// Minimal MOBI with a full name and an EXTH author/title.
     pub fn sample_mobi(title: &str, author: &str) -> Vec<u8> {
+        sample_mobi_drm(title, author, false)
+    }
+
+    pub fn sample_mobi_drm(title: &str, author: &str, drm: bool) -> Vec<u8> {
         let mut rec0 = vec![0u8; 16];
+        if drm {
+            rec0[12..14].copy_from_slice(&2u16.to_be_bytes());
+        }
         let mut mobi = vec![0u8; 0xe8];
         mobi[0..4].copy_from_slice(b"MOBI");
         mobi[4..8].copy_from_slice(&(0xe8u32).to_be_bytes());
@@ -156,6 +172,9 @@ pub(crate) mod tests {
         let m = read_meta(&p).unwrap();
         assert_eq!(m.title.as_deref(), Some("Le Comte de Monte-Cristo"));
         assert_eq!(m.author.as_deref(), Some("Alexandre Dumas"));
+        assert!(!m.drm);
+        std::fs::write(&p, sample_mobi_drm("Acheté", "Amazon", true)).unwrap();
+        assert!(read_meta(&p).unwrap().drm, "Amazon DRM detected");
         std::fs::remove_dir_all(dir).ok();
     }
 

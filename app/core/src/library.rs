@@ -33,6 +33,8 @@ pub const KINDLE_MARGIN: u64 = 5 * 1024 * 1024;
 /// Used for "about N more books" before she has any converted book.
 pub const DEFAULT_BOOK_SIZE: u64 = 700 * 1024;
 const TRASH_DAYS: u64 = 30;
+const PROTECTED_ADVICE: &str =
+    "Acheté sur Amazon : ce livre se lit seulement sur votre liseuse. Gardez-le ici, c'est votre copie de sauvegarde.";
 /// Files on the Kindle that are not hers to move around.
 const KINDLE_PROTECTED: &[&str] = &[
     "clippings",
@@ -62,6 +64,8 @@ pub struct PcBook {
     /// Why it can't go on the Kindle ("drm", "convert").
     pub error: Option<String>,
     pub on_kindle: bool,
+    /// Bought on Amazon with copy protection: fine on her Kindle, useless to share.
+    pub protected: bool,
     /// File name it has (or will have) in the Kindle's `documents` folder.
     pub kindle_name: String,
     pub added: u64,
@@ -77,6 +81,8 @@ pub struct KindleBook {
     pub size: u64,
     /// The same book exists in her library on the PC.
     pub on_pc: bool,
+    /// Bought on Amazon with copy protection.
+    pub protected: bool,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -405,8 +411,13 @@ impl Library {
                     converting: false,
                     error: None,
                     on_kindle: false,
+                    protected: false,
                     added: mtime_secs(&m),
                 };
+                if f.palmdb() && self.cached_meta(&p, &m).is_some_and(|mm| mm.drm) {
+                    b.protected = true;
+                    b.advice = PROTECTED_ADVICE.into();
+                }
                 if !f.kindle_native() {
                     if let Ok(cm) = fs::metadata(self.cache_path(&stem)) {
                         b.ready = true;
@@ -581,11 +592,13 @@ impl Library {
                 } else {
                     None
                 };
+                let protected = meta.as_ref().is_some_and(|m| m.drm);
                 let (title, author) = match meta.and_then(|m| m.title.map(|t| (t, m.author))) {
                     Some((t, a)) => (t, a),
                     None => split_title(&stem),
                 };
                 Some(KindleBook {
+                    protected,
                     on_pc: pc_names.contains(&lower),
                     id: name,
                     title,
@@ -615,7 +628,14 @@ impl Library {
 
     /// The file to send to a friend (the original: EPUB reads everywhere).
     pub fn share_file(&self, id: &str) -> Result<PathBuf, OpError> {
-        self.find_file(id).map(|(p, _)| p).ok_or_else(missing)
+        let (p, f) = self.find_file(id).ok_or_else(missing)?;
+        if f.palmdb() && mobi::read_meta(&p).is_some_and(|m| m.drm) {
+            return Err(OpError::new(
+                "protected",
+                "Ce livre a été acheté sur Amazon : il ne s'ouvrirait pas chez votre ami.",
+            ));
+        }
+        Ok(p)
     }
 
     pub fn overview(&self, k: Option<&Kindle>) -> Overview {

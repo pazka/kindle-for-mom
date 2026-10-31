@@ -43,7 +43,7 @@
     return {
       id: stem, file_name: `${stem}.${format}`, title, author, format, size, kindle_size: native ? size : Math.round(size * 1.3),
       light, advice: adv, ready: native, converting: !native, error: null, on_kindle: false,
-      kindle_name: `${stem}.${native ? format : "mobi"}`, added: 0, ...extra,
+      kindle_name: `${stem}.${native ? format : "mobi"}`, added: 0, protected: false, ...extra,
     };
   }
 

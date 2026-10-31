@@ -291,3 +291,13 @@ test("pictures are shrunk for the Kindle 4 screen (600×800, greys, ≤ 60 KB)",
     assert.ok(r.k4 < r.gen, "smaller than the generic profile");
   });
 });
+
+test("a book bought on Amazon is labelled and can't be sent to a friend", async () => {
+  const advice = "Acheté sur Amazon : ce livre se lit seulement sur votre liseuse.";
+  await withApp([everyday, new Function("f", `f.addPcBook("L'Étranger - Albert Camus", "azw", 600000, { protected: true, advice: ${JSON.stringify(advice)} });`)], async (page) => {
+    assert.match(await page.locator("li.book").innerText(), /Acheté sur Amazon/);
+    await page.click("li.book");
+    assert.match(await page.locator("#d-light").innerText(), /seulement sur votre liseuse/);
+    assert.equal(await page.locator("#d-actions >> text=Envoyer à un ami").count(), 0);
+  });
+});
