@@ -1,8 +1,9 @@
 # Keep libraries up to date for security (owner's rule, 2026-10-31).
 # Updates wait 7 days after a release (supply-chain rule, STANDARDS §6).
 # Minor and patch updates are grouped; .github/workflows/dependabot-merge.yml
-# merges them once the whole safety net is green. Major updates and GitHub
-# Actions updates wait for a review.
+# merges them once the whole safety net is green. Major updates get the
+# "needs-review" label and wait for a review. Box standard: hosh-migration
+# 11-BOX-STANDARD.md §2 (Decision #18).
 version: 2
 updates:
   - package-ecosystem: cargo
@@ -23,3 +24,6 @@ updates:
     directory: /
     schedule: { interval: weekly, day: monday }
     cooldown: { default-days: 7 }
+    groups:
+      minor-and-patch:
+        update-types: [minor, patch]

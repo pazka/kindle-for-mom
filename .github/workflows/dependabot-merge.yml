@@ -1,7 +1,11 @@
-# Merge Dependabot's minor/patch updates once the "app" workflow (Rust core,
-# UI + converter + end-to-end journeys, Windows tests + installer) passed on
-# the PR. Major updates stay open for a review. No third-party action: only
-# the GitHub API through the preinstalled gh CLI.
+# Merge Dependabot's minor and patch updates once CI passed on that exact commit (box standard,
+# hosh-migration 11-BOX-STANDARD.md §2). Majors and anything unusual get the "needs-review" label
+# and stay open. The decision logic is .github/scripts/dependabot-merge.sh, read from the default
+# branch (never from the PR), and it tests itself before deciding.
+#
+# Per repo: put the exact `name:` of the workflow that runs the full test suite on pull requests in
+# `workflows:` below and in CI_WORKFLOW. That workflow must also accept `workflow_dispatch`
+# (it is re-run on the default branch after each merge).
 name: dependabot-merge
 
 on:
@@ -9,9 +13,11 @@ on:
     workflows: [app]
     types: [completed]
 
-permissions:
-  contents: write
-  pull-requests: write
+permissions: {}
+
+concurrency:
+  group: dependabot-merge
+  cancel-in-progress: false
 
 jobs:
   merge:
@@ -21,22 +27,23 @@ jobs:
       github.event.workflow_run.actor.login == 'dependabot[bot]' &&
       github.event.workflow_run.head_repository.full_name == github.repository
     runs-on: ubuntu-24.04
+    permissions:
+      contents: write        # merge
+      pull-requests: write   # merge
+      issues: write          # "needs-review" label
+      actions: write         # re-run CI on the default branch
     steps:
+      - uses: actions/checkout@v4   # default branch: trusted code only
+        with:
+          persist-credentials: false
+          sparse-checkout: .github/scripts
+      - name: Self-test the merge policy
+        run: bash .github/scripts/dependabot-merge.sh self-test
       - name: Merge if it is a tested minor or patch update
         env:
           GH_TOKEN: ${{ github.token }}
           REPO: ${{ github.repository }}
           BRANCH: ${{ github.event.workflow_run.head_branch }}
           SHA: ${{ github.event.workflow_run.head_sha }}
-        run: |
-          set -euo pipefail
-          pr=$(gh api "repos/$REPO/pulls?state=open&head=${REPO%%/*}:$BRANCH" -q '.[0].number // empty')
-          [ -n "$pr" ] || { echo "no open PR for $BRANCH"; exit 0; }
-          read -r author head title < <(gh api "repos/$REPO/pulls/$pr" -q '[.user.login, .head.sha, .title] | @tsv')
-          [ "$author" = "dependabot[bot]" ] || { echo "not a Dependabot PR"; exit 0; }
-          [ "$head" = "$SHA" ] || { echo "PR moved on since this run; its own run decides"; exit 0; }
-          # "Bump x from 1.2.3 to 2.0.0": a new major version waits for a review
-          if [[ "$title" =~ from\ v?([0-9]+)[^\ ]*\ to\ v?([0-9]+) ]] && [ "${BASH_REMATCH[1]}" != "${BASH_REMATCH[2]}" ]; then
-            echo "major update: left for review"; exit 0
-          fi
-          gh api -X PUT "repos/$REPO/pulls/$pr/merge" -f merge_method=squash -f sha="$SHA"
+          CI_WORKFLOW: app
+        run: bash .github/scripts/dependabot-merge.sh run
