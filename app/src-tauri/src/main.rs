@@ -225,6 +225,34 @@ async fn set_ui_state(app: State<'_, App>, ui: serde_json::Value) -> Res<()> {
     app.lib.save_state(&s).map_err(OpError::from)
 }
 
+/// "Envoyer à un ami": open a ready-written email and show the book file
+/// selected in File Explorer, so she drags it into the message. Works with
+/// any mail program or webmail.
+#[tauri::command]
+async fn share_book(app: State<'_, App>, id: String) -> Res<()> {
+    let file = app.lib.share_file(&id)?;
+    let book = app.lib.pc_books().into_iter().find(|b| b.id == id);
+    let (title, author) = book.map(|b| (b.title, b.author)).unwrap_or((id, None));
+    let mailto = liseuse_core::library::share_mailto(&title, author.as_deref());
+    #[cfg(windows)]
+    {
+        use std::process::Command;
+        Command::new("explorer.exe")
+            .arg(format!("/select,{}", file.display()))
+            .spawn()
+            .map_err(OpError::from)?;
+        Command::new("rundll32.exe")
+            .args(["url.dll,FileProtocolHandler", &mailto])
+            .spawn()
+            .map_err(OpError::from)?;
+    }
+    #[cfg(not(windows))]
+    {
+        let _ = (file, mailto);
+    }
+    Ok(())
+}
+
 /// Show the library folder in File Explorer.
 #[tauri::command]
 async fn open_library(app: State<'_, App>) -> Res<()> {
@@ -278,6 +306,7 @@ fn main() {
             get_ui_state,
             set_ui_state,
             open_library,
+            share_book,
         ])
         .run(tauri::generate_context!())
         .expect("Ma liseuse n'a pas pu démarrer");

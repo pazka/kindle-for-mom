@@ -20,10 +20,11 @@ use crate::formats::{Format, Light};
 use crate::kindle::Kindle;
 use crate::mobi;
 use serde::{Deserialize, Serialize};
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::fs;
 use std::io;
 use std::path::{Path, PathBuf};
+use std::sync::Mutex;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 /// Keep this much free on the Kindle on top of the book itself
@@ -280,12 +281,19 @@ fn eq_ci(a: &str, b: &str) -> bool {
 
 pub struct Library {
     root: PathBuf,
+    /// Titles read from Kindle files, keyed by path + size + mtime: with
+    /// hundreds of books on a USB 2 Kindle, re-reading every header on each
+    /// refresh would be slow.
+    meta_cache: Mutex<HashMap<(PathBuf, u64, u64), Option<mobi::MobiMeta>>>,
 }
 
 impl Library {
     /// Open (and create if needed) the library folder.
     pub fn open(root: impl Into<PathBuf>) -> io::Result<Library> {
-        let lib = Library { root: root.into() };
+        let lib = Library {
+            root: root.into(),
+            meta_cache: Mutex::new(HashMap::new()),
+        };
         for d in ["kindle", "positions", "corbeille"] {
             fs::create_dir_all(lib.meta_dir().join(d))?;
         }
@@ -569,7 +577,7 @@ impl Library {
                 let format = Format::from_path(&p).filter(|f| f.kindle_native())?;
                 let stem = p.file_stem()?.to_string_lossy().into_owned();
                 let meta = if format.palmdb() {
-                    mobi::read_meta(&p)
+                    self.cached_meta(&p, &m)
                 } else {
                     None
                 };
@@ -589,6 +597,25 @@ impl Library {
             .collect();
         v.sort_by_key(|b| b.title.to_lowercase());
         v
+    }
+
+    fn cached_meta(&self, p: &Path, m: &fs::Metadata) -> Option<mobi::MobiMeta> {
+        let key = (p.to_path_buf(), m.len(), mtime_secs(m));
+        let mut cache = self.meta_cache.lock().unwrap_or_else(|e| e.into_inner());
+        if let Some(v) = cache.get(&key) {
+            return v.clone();
+        }
+        let v = mobi::read_meta(p);
+        if cache.len() > 5000 {
+            cache.clear();
+        }
+        cache.insert(key, v.clone());
+        v
+    }
+
+    /// The file to send to a friend (the original: EPUB reads everywhere).
+    pub fn share_file(&self, id: &str) -> Result<PathBuf, OpError> {
+        self.find_file(id).map(|(p, _)| p).ok_or_else(missing)
     }
 
     pub fn overview(&self, k: Option<&Kindle>) -> Overview {
@@ -902,3 +929,28 @@ fn hide(p: &Path) {
 
 #[cfg(not(windows))]
 fn hide(_p: &Path) {}
+
+fn percent_encode(s: &str) -> String {
+    s.bytes()
+        .map(|b| match b {
+            b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'_' | b'.' | b'~' => {
+                (b as char).to_string()
+            }
+            _ => format!("%{b:02X}"),
+        })
+        .collect()
+}
+
+/// A `mailto:` link with a ready-written message to send a book to a friend.
+pub fn share_mailto(title: &str, author: Option<&str>) -> String {
+    let by = author.map(|a| format!(" de {a}")).unwrap_or_default();
+    let subject = format!("Un livre pour toi : {title}");
+    let body = format!(
+        "Bonjour,\n\nJe te fais découvrir « {title} »{by}. Le livre est en pièce jointe.\n\nBonne lecture !\n"
+    );
+    format!(
+        "mailto:?subject={}&body={}",
+        percent_encode(&subject),
+        percent_encode(&body.replace('\n', "\r\n"))
+    )
+}

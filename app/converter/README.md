@@ -21,7 +21,7 @@ const { mobi, meta, warnings, stats } = await convertEpub(epubBytes /* Uint8Arra
 | `css.js` | CSS subset → italic/bold/underline/align/hidden/page breaks |
 | `html.js` | XHTML → MOBI HTML (`filepos` links, `recindex` images, `<mbp:pagebreak/>`) |
 | `mobi.js` | PalmDOC compressor, MOBI 6 writer **and reader** (self-check after each conversion) |
-| `images.js` | browser-only: canvas re-encode to JPEG ≤ 127 KiB, ≤ 1072×1448, white background |
+| `images.js` | browser-only: canvas re-encode to JPEG on a white background. Profiles: `generic` (≤ 1072×1448, ≤ 127 KiB) and `kindle4` (≤ 600×800, greyscale, ≤ 60 KiB) |
 | `convert.js` | orchestration + `mobiFileName()` (FAT32-safe) |
 
 Tests: `node --test test/*.test.js` (22 tests). Validated on all 45 IDPF `epub3-samples` books;

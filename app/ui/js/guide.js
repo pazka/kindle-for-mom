@@ -28,7 +28,12 @@ export const GUIDE_STEPS = [
   {
     art: "art/trip.svg",
     title: "Avant un voyage",
-    text: "Cliquez sur « Préparer un voyage » et cochez les livres à emporter : l'application vous dit s'il y a assez de place. Pour faire de la place, cliquez sur « Ranger » à côté d'un livre de la liseuse. Il reste sur l'ordinateur, et votre page est gardée.",
+    text: "Cochez les livres à emporter, même des dizaines d'un coup : l'application vous dit s'il y a assez de place. Puis cliquez sur « Mettre dans la liseuse ». Pour faire de la place, cochez des livres sur l'écran de la liseuse et cliquez sur « Ranger sur l'ordinateur » : ils restent sur l'ordinateur, et vos pages sont gardées.",
+  },
+  {
+    art: "art/find.svg",
+    title: "Retrouver un livre",
+    text: "Tapez quelques lettres du titre ou de l'auteur dans « Chercher ». Les boutons « Dans la liseuse » et « Pas dans la liseuse » montrent où sont vos livres. Cliquez sur un livre pour le voir en grand, ou pour l'envoyer à un ami par e-mail.",
   },
   {
     art: "art/lights.svg",
@@ -46,6 +51,7 @@ export const TIPS = {
   kindle: "Voici votre liseuse ! Ses livres s'affichent sur son écran. La barre en dessous montre la place qui reste.",
   firstPut: "Cliquez ici pour mettre ce livre dans votre liseuse.",
   take: "« Ranger » enlève le livre de la liseuse. Il reste sur l'ordinateur, et votre page est gardée.",
+  tick: "Cochez plusieurs livres pour les mettre dans la liseuse en une seule fois.",
 };
 
 /** Wire the guide modal; returns open(). */

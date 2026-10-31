@@ -27,6 +27,7 @@ export const api = {
   getUiState: () => invoke("get_ui_state"),
   setUiState: (ui) => invoke("set_ui_state", { ui }),
   openLibrary: () => invoke("open_library"),
+  shareBook: (id) => invoke("share_book", { id }),
   /** Files dropped from File Explorer: cb(paths), plus hover in/out. */
   onFileDrop(cb, hover) {
     const ev = window.__TAURI__.event;

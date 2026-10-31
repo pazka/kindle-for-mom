@@ -29,12 +29,27 @@
             <h2>Mon ordinateur</h2>
             <span id="pc-count" class="muted"></span>
           </div>
+          <div id="pc-tools" class="tools">
+            <input id="pc-search" class="search" type="search" placeholder="🔍 Chercher un titre ou un auteur" aria-label="Chercher un livre">
+            <div id="pc-filters" class="chips" role="tablist">
+              <button class="chip on" data-filter="all"></button>
+              <button class="chip" data-filter="kindle"></button>
+              <button class="chip" data-filter="pc"></button>
+            </div>
+          </div>
           <div id="pc-empty" class="empty" hidden>
             <div class="empty-books" aria-hidden="true"></div>
             <p><b>Votre bibliothèque est vide.</b></p>
             <p>Faites glisser un livre ici,<br>ou cliquez sur <b>« ＋ Ajouter un livre »</b>.</p>
           </div>
-          <ul id="pc-list" class="shelf"></ul>
+          <div id="pc-none" class="none" hidden>Aucun livre ne correspond.</div>
+          <label id="pc-all" class="select-all" hidden><input type="checkbox" id="pc-all-box"> Tout cocher</label>
+          <ul id="pc-list" class="rows"></ul>
+          <div id="pc-bar" class="bar" hidden>
+            <span id="pc-bar-text" class="bar-text"></span>
+            <button id="pc-bar-clear" class="btn btn-link">Tout décocher</button>
+            <button id="pc-bar-go" class="btn btn-green">Mettre dans la liseuse →</button>
+          </div>
           <div id="drop-hint" class="drop-hint" hidden>Lâchez le livre ici</div>
         </div>
         <div class="monitor-chin"><span class="power-led"></span></div>
@@ -43,20 +58,9 @@
       <div class="monitor-foot"></div>
     </section>
 
-    <!-- ============ between the two ============ -->
-    <section class="middle" aria-label="Actions">
-      <div id="cable" class="cable" aria-hidden="true"></div>
-      <div id="trip" class="trip" hidden>
-        <p class="trip-title">Préparer un voyage</p>
-        <p id="trip-info" class="trip-info"></p>
-        <button id="trip-go" class="btn btn-big btn-green">Mettre ces livres<br>dans la liseuse →</button>
-        <button id="trip-cancel" class="btn btn-link">Annuler</button>
-      </div>
-      <button id="trip-start" class="btn btn-wood btn-trip" hidden>🧳 Préparer un voyage</button>
-    </section>
-
     <!-- ============ the Kindle ============ -->
     <section class="kindle-wrap" aria-label="Ma liseuse">
+      <div id="cable" class="cable" aria-hidden="true"></div>
       <div id="kindle" class="kindle off">
         <div class="kindle-brand">kindle</div>
         <div class="kindle-screen">
@@ -67,14 +71,19 @@
           </div>
           <div id="k-on" class="k-on" hidden>
             <div class="k-head"><span>Ma liseuse</span><span id="k-count"></span></div>
+            <input id="k-search" class="k-search" type="search" placeholder="Chercher…" aria-label="Chercher dans la liseuse" hidden>
             <div id="k-empty" class="k-empty" hidden>Aucun livre sur la liseuse pour l'instant.</div>
             <ul id="k-list" class="k-list"></ul>
+            <div id="k-bar" class="k-bar" hidden>
+              <span id="k-bar-text"></span>
+              <button id="k-bar-go" class="btn btn-wood btn-small">← Ranger sur l'ordinateur</button>
+            </div>
           </div>
         </div>
         <div class="kindle-keys" aria-hidden="true">
-          <span class="key k-back"></span><span class="key k-kbd"></span>
+          <span class="key"></span><span class="key"></span>
           <span class="pad"><span class="pad-center"></span></span>
-          <span class="key k-menu"></span><span class="key k-home"></span>
+          <span class="key"></span><span class="key"></span>
         </div>
       </div>
       <div id="k-status" class="k-status">
@@ -83,10 +92,20 @@
           <div class="gauge-shelf"><div id="gauge-fill" class="gauge-fill"></div></div>
           <p id="gauge-text" class="gauge-text"></p>
         </div>
-        <button id="btn-eject" class="btn btn-big btn-blue" hidden>J'ai fini,<br>je débranche</button>
+        <button id="btn-eject" class="btn btn-big btn-blue" hidden>J'ai fini, je débranche</button>
       </div>
     </section>
   </main>
+
+  <!-- bulk copy progress -->
+  <div id="progress" class="modal" hidden>
+    <div class="card big-card">
+      <h3 id="p-title">Copie en cours…</h3>
+      <div class="pbar"><div id="p-fill" class="pfill"></div></div>
+      <p id="p-text"></p>
+      <button id="p-stop" class="btn btn-wood">Arrêter après ce livre</button>
+    </div>
+  </div>
 
   <!-- book details -->
   <div id="details" class="modal" hidden>

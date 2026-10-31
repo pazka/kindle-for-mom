@@ -84,3 +84,31 @@ export function splitFileName(name) {
 }
 
 export const SUPPORTED = ["epub", "mobi", "azw", "azw3", "prc", "pdf", "txt"];
+
+/** Lowercase without accents, for forgiving search ("emile" finds "Émile"). */
+export function fold(s) {
+  return String(s || "").normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
+}
+
+/**
+ * Books shown in the computer list.
+ * @param {"all"|"kindle"|"pc"} filter  all / on the Kindle / not on the Kindle
+ */
+export function filterBooks(books, { query = "", filter = "all" } = {}) {
+  const words = fold(query).split(/\s+/).filter(Boolean);
+  return books.filter((b) => {
+    if (filter === "kindle" && !b.on_kindle) return false;
+    if (filter === "pc" && b.on_kindle) return false;
+    const hay = fold(`${b.title} ${b.author || ""}`);
+    return words.every((w) => hay.includes(w));
+  });
+}
+
+/** Kindle books matching a search. */
+export function filterKindle(books, query = "") {
+  const words = fold(query).split(/\s+/).filter(Boolean);
+  return books.filter((b) => words.every((w) => fold(`${b.title} ${b.author || ""}`).includes(w)));
+}
+
+/** A PC book that can be ticked to go on the Kindle. */
+export const canGoOnKindle = (b) => b.ready && !b.error && !b.on_kindle;

@@ -58,3 +58,27 @@ test("misc", () => {
   assert.deepEqual(splitFileName("Le Rouge et le Noir.EPUB"), { stem: "Le Rouge et le Noir", ext: "epub" });
   assert.deepEqual(splitFileName(".hidden"), { stem: ".hidden", ext: "" });
 });
+
+import { canGoOnKindle, filterBooks, filterKindle, fold } from "../js/text.js";
+
+test("search ignores accents and case, and combines words", () => {
+  const books = [
+    { title: "Germinal", author: "Émile Zola", on_kindle: true },
+    { title: "Nana", author: "Émile Zola", on_kindle: false },
+    { title: "Candide", author: "Voltaire", on_kindle: false },
+  ];
+  assert.equal(fold("Émile"), "emile");
+  assert.deepEqual(filterBooks(books, { query: "emile" }).map((b) => b.title), ["Germinal", "Nana"]);
+  assert.deepEqual(filterBooks(books, { query: "zola nana" }).map((b) => b.title), ["Nana"]);
+  assert.deepEqual(filterBooks(books, { filter: "kindle" }).map((b) => b.title), ["Germinal"]);
+  assert.deepEqual(filterBooks(books, { filter: "pc", query: "VOLT" }).map((b) => b.title), ["Candide"]);
+  assert.equal(filterBooks(books).length, 3);
+  assert.deepEqual(filterKindle([{ title: "Le Petit Prince", author: "Saint-Exupéry" }], "exupery").length, 1);
+});
+
+test("only ready books not yet on the Kindle can be ticked", () => {
+  assert.equal(canGoOnKindle({ ready: true, error: null, on_kindle: false }), true);
+  assert.equal(canGoOnKindle({ ready: false, error: null, on_kindle: false }), false);
+  assert.equal(canGoOnKindle({ ready: true, error: "drm", on_kindle: false }), false);
+  assert.equal(canGoOnKindle({ ready: true, error: null, on_kindle: true }), false);
+});

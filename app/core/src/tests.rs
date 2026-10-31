@@ -214,3 +214,23 @@ fn rename_moves_kindle_copy() {
     assert!(b.ready);
     assert_eq!(lib.rename(&new, &new).unwrap(), new);
 }
+
+#[test]
+fn share_link_is_a_ready_written_email() {
+    let m = share_mailto("Candide & co", Some("Voltaire"));
+    assert!(
+        m.starts_with("mailto:?subject=Un%20livre%20pour%20toi%20%3A%20Candide%20%26%20co&body=")
+    );
+    assert!(m.contains("Voltaire"));
+    assert!(!m.contains(' ') && !m.contains('\n'));
+    let sb = Sandbox::new("share");
+    let lib = sb.lib();
+    let id = lib
+        .add_bytes("Candide - Voltaire", Format::Epub, b"x")
+        .unwrap();
+    assert!(lib
+        .share_file(&id)
+        .unwrap()
+        .ends_with("Candide - Voltaire.epub"));
+    assert_eq!(lib.share_file("nope").unwrap_err().code, "missing");
+}

@@ -5,6 +5,7 @@
 import assert from "node:assert/strict";
 import { after, before, test } from "node:test";
 import { makeZip, sampleEpub } from "../converter/test/fixtures.js";
+import { GUIDE_STEPS } from "../ui/js/guide.js";
 import { chromium, openApp, startServer } from "./harness.mjs";
 
 let browser, server, url;
@@ -40,7 +41,7 @@ test("first start shows the guide once, and Aide replays it", async () => {
   await withApp([], async (page) => {
     await page.waitForSelector("#guide:not([hidden])");
     assert.equal(await page.locator("#g-title").innerText(), "Bienvenue !");
-    for (let i = 0; i < 6; i++) await page.click("#g-next");
+    for (let i = 0; i < GUIDE_STEPS.length - 1; i++) await page.click("#g-next");
     assert.equal(await page.locator("#g-next").innerText(), "C'est parti !");
     await page.click("#g-next");
     await page.waitForSelector("#guide", { state: "hidden" });
@@ -96,7 +97,7 @@ test("a full Kindle explains what to do instead of failing", async () => {
   });
 });
 
-test("preparing a trip tells whether the books fit, then copies them", async () => {
+test("ticking many books tells whether they fit, then copies them with a progress bar", async () => {
   const seed = (f) => {
     f.plug(60 * 1024 * 1024);
     f.addPcBook("A - X", "mobi", 10 * 1024 * 1024);
@@ -104,18 +105,86 @@ test("preparing a trip tells whether the books fit, then copies them", async () 
     f.addPcBook("C - Z", "pdf", 30 * 1024 * 1024);
   };
   await withApp([everyday, seed], async (page) => {
-    await page.click("#trip-start");
-    await page.click("li.book >> nth=0");
-    await page.click("li.book >> nth=1");
-    assert.match(await page.locator("#trip-info").innerText(), /2 livres.*ça rentre/);
-    await page.click("li.book >> nth=2");
-    assert.match(await page.locator("#trip-info").innerText(), /il manque/);
-    assert.equal(await page.locator("#trip-go").isDisabled(), true);
-    await page.click("li.book >> nth=2");
-    await page.click("#trip-go");
+    const box = (n) => page.locator("li.book input[type=checkbox]").nth(n);
+    await box(0).click();
+    await box(1).click();
+    assert.match(await page.locator("#pc-bar-text").innerText(), /2 livres.*ça rentre/);
+    await box(2).click();
+    assert.match(await page.locator("#pc-bar-text").innerText(), /il manque/);
+    assert.equal(await page.locator("#pc-bar-go").isDisabled(), true);
+    await box(2).click();
+    await page.click("#pc-bar-go");
     await page.waitForFunction(() => document.querySelectorAll(".k-item").length === 2);
-    assert.match(await toastText(page), /Bon voyage/);
+    assert.match(await toastText(page), /2 livres sont dans la liseuse/);
+    assert.equal(await page.locator("#progress").isHidden(), true);
   });
+});
+
+test("'Tout cocher' ticks every visible book, and the Kindle side unloads in bulk", async () => {
+  const seed = (f) => {
+    f.plug();
+    for (let i = 1; i <= 30; i++) f.addPcBook(`Livre ${String(i).padStart(2, "0")} - Auteur`, "mobi", 400_000);
+  };
+  await withApp([everyday, seed], async (page) => {
+    await page.click("#pc-all-box");
+    assert.match(await page.locator("#pc-bar-go").innerText(), /ces 30 livres/);
+    await page.click("#pc-bar-go");
+    await page.waitForFunction(() => document.querySelectorAll(".k-item").length === 30, null, { timeout: 15000 });
+    assert.match(await page.locator("#k-count").innerText(), /30 livres/);
+
+    for (let n = 0; n < 3; n++) await page.locator(".k-item input").nth(n).click();
+    assert.match(await page.locator("#k-bar-text").innerText(), /3 livres cochés/);
+    await page.click("#k-bar-go");
+    await page.waitForFunction(() => document.querySelectorAll(".k-item").length === 27);
+    assert.match(await toastText(page), /3 livres rangés/);
+  });
+});
+
+test("with hundreds of books, search and filters find a book fast", async () => {
+  const seed = (f) => {
+    f.plug();
+    for (let i = 1; i <= 400; i++) f.addPcBook(`Roman ${i} - Auteur ${i % 37}`, "mobi", 300_000);
+    f.addPcBook("Germinal - Émile Zola", "mobi", 900_000);
+    f.addKindleBook("Germinal - Émile Zola.mobi", "Germinal", "Émile Zola", 900_000);
+  };
+  await withApp([everyday, seed], async (page) => {
+    await page.waitForFunction(() => document.querySelectorAll("li.book").length === 401);
+    await page.fill("#pc-search", "emile");
+    await page.waitForFunction(() => document.querySelectorAll("li.book").length === 1);
+    assert.match(await page.locator("li.book").innerText(), /Germinal/);
+    await page.fill("#pc-search", "");
+    await page.click("[data-filter=kindle]");
+    assert.equal(await page.locator("li.book").count(), 1);
+    assert.match(await page.locator("[data-filter=pc]").innerText(), /Pas dans la liseuse \(400\)/);
+    await page.fill("#pc-search", "introuvable");
+    assert.equal(await page.locator("#pc-none").isVisible(), true);
+  });
+});
+
+test("'Envoyer à un ami' prepares the email and explains the last step", async () => {
+  await withApp([everyday, (f) => f.addPcBook("Candide - Voltaire", "epub", 300_000, { ready: true, converting: false })], async (page) => {
+    await page.click("li.book");
+    await page.click("#d-actions >> text=Envoyer à un ami");
+    await page.waitForSelector("#bigmsg:not([hidden])");
+    assert.match(await page.locator("#bm-text").innerText(), /faites-le glisser dans le message/);
+    assert.equal(await page.evaluate(() => window.__fake.shared), "Candide - Voltaire");
+  });
+});
+
+test("the screen fits a small laptop (1024×600) without hiding the main buttons", async () => {
+  const { page, context, errors } = await openApp(browser, url, [everyday, (f) => { f.plug(); for (let i = 0; i < 40; i++) f.addPcBook(`Livre ${i} - A`, "mobi", 400_000); }], { viewport: { width: 1024, height: 600 } });
+  try {
+    await page.waitForSelector("li.book");
+    for (const sel of ["#btn-add", "#btn-help", "#btn-eject", "#pc-search", "#gauge"]) {
+      const box = await page.locator(sel).boundingBox();
+      assert.ok(box && box.y >= 0 && box.y + box.height <= 600 && box.x + box.width <= 1024, `${sel} visible: ${JSON.stringify(box)}`);
+    }
+    const doc = await page.evaluate(() => ({ w: document.documentElement.scrollWidth, h: document.documentElement.scrollHeight }));
+    assert.ok(doc.w <= 1024 && doc.h <= 600, `no page scrollbars: ${JSON.stringify(doc)}`);
+    assert.deepEqual(errors.map(String), []);
+  } finally {
+    await context.close();
+  }
 });
 
 test("a new download is offered once; 'Non merci' is remembered", async () => {
@@ -198,5 +267,27 @@ test("the first tip points at the transfer button, and is shown only once", asyn
     assert.match(await page.locator("#tip-text").innerText(), /mettre ce livre/);
     await page.click("#tip-ok");
     await page.waitForFunction(() => window.__fake.state.ui.tips?.includes("firstPut"));
+  });
+});
+
+test("pictures are shrunk for the Kindle 4 screen (600×800, greys, ≤ 60 KB)", async () => {
+  await withApp([everyday], async (page) => {
+    const r = await page.evaluate(async () => {
+      const { kindle4Image, kindleImage } = await import("./converter/images.js");
+      const c = Object.assign(document.createElement("canvas"), { width: 2000, height: 1500 });
+      const g = c.getContext("2d");
+      for (let i = 0; i < 4000; i++) {
+        g.fillStyle = `hsl(${i % 360} 80% 50%)`;
+        g.fillRect((i * 37) % 2000, (i * 91) % 1500, 60, 40);
+      }
+      const png = new Uint8Array(await (await new Promise((res) => c.toBlob(res, "image/png"))).arrayBuffer());
+      const k4 = await kindle4Image(png, "image/png");
+      const gen = await kindleImage(png, "image/png");
+      const img = await createImageBitmap(new Blob([k4.bytes], { type: "image/jpeg" }));
+      return { k4: k4.bytes.length, gen: gen.bytes.length, w: img.width, h: img.height };
+    });
+    assert.ok(r.k4 <= 60 * 1024, `kindle4 image is ${r.k4} bytes`);
+    assert.ok(r.w <= 600 && r.h <= 800, `${r.w}×${r.h}`);
+    assert.ok(r.k4 < r.gen, "smaller than the generic profile");
   });
 });
