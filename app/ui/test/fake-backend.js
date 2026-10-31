@@ -21,6 +21,7 @@
       ui: {},
       trash: new Map(),
       update: null, // version offered by check_update
+      overviewDelay: 0, // ms: a real Kindle with 1 000 books takes a while the first time
     },
   };
 
@@ -189,7 +190,7 @@
 
   async function invoke(cmd, args, opts) {
     fake.calls.push(cmd);
-    await new Promise((r) => setTimeout(r, 5));
+    await new Promise((r) => setTimeout(r, cmd === "overview" && fake.state.kindle ? fake.state.overviewDelay || 5 : 5));
     if (!commands[cmd]) throw err("unknown", `commande inconnue ${cmd}`);
     const out = await commands[cmd](args || {}, opts);
     return out === undefined ? null : structuredClone(out);

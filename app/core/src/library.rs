@@ -375,12 +375,29 @@ fn link(pc: &mut [PcBook], kindle: &mut [KindleBook]) {
     }
 }
 
+/// Titles read from book files, keyed by path + size + mtime. Reading the
+/// headers of 1 000 books on a USB 2 Kindle takes about a minute, so the
+/// cache is kept in `.liseuse/titres.json` between sessions: only new or
+/// changed files are read again.
+#[derive(Default)]
+struct MetaCache {
+    map: HashMap<(String, u64, u64), Option<mobi::MobiMeta>>,
+    dirty: bool,
+}
+
+#[derive(Serialize, Deserialize)]
+struct MetaEntry {
+    path: String,
+    size: u64,
+    mtime: u64,
+    meta: Option<mobi::MobiMeta>,
+}
+
+const META_CACHE_MAX: usize = 20_000;
+
 pub struct Library {
     root: PathBuf,
-    /// Titles read from Kindle files, keyed by path + size + mtime: with
-    /// hundreds of books on a USB 2 Kindle, re-reading every header on each
-    /// refresh would be slow.
-    meta_cache: Mutex<HashMap<(PathBuf, u64, u64), Option<mobi::MobiMeta>>>,
+    meta_cache: Mutex<MetaCache>,
 }
 
 impl Library {
@@ -388,11 +405,12 @@ impl Library {
     pub fn open(root: impl Into<PathBuf>) -> io::Result<Library> {
         let lib = Library {
             root: root.into(),
-            meta_cache: Mutex::new(HashMap::new()),
+            meta_cache: Mutex::new(MetaCache::default()),
         };
         for d in ["kindle", "positions", "corbeille"] {
             fs::create_dir_all(lib.meta_dir().join(d))?;
         }
+        lib.load_meta_cache();
         hide(&lib.meta_dir());
         lib.purge_trash();
         Ok(lib)
@@ -813,17 +831,60 @@ impl Library {
     }
 
     fn cached_meta(&self, p: &Path, m: &fs::Metadata) -> Option<mobi::MobiMeta> {
-        let key = (p.to_path_buf(), m.len(), mtime_secs(m));
+        let key = (p.to_string_lossy().into_owned(), m.len(), mtime_secs(m));
         let mut cache = self.meta_cache.lock().unwrap_or_else(|e| e.into_inner());
-        if let Some(v) = cache.get(&key) {
+        if let Some(v) = cache.map.get(&key) {
             return v.clone();
         }
         let v = mobi::read_meta(p);
-        if cache.len() > 5000 {
-            cache.clear();
+        if cache.map.len() >= META_CACHE_MAX {
+            cache.map.clear();
         }
-        cache.insert(key, v.clone());
+        cache.map.insert(key, v.clone());
+        cache.dirty = true;
         v
+    }
+
+    fn meta_cache_file(&self) -> PathBuf {
+        self.meta_dir().join("titres.json")
+    }
+
+    /// A missing or damaged cache file just means reading the headers again.
+    fn load_meta_cache(&self) {
+        let Some(entries) = fs::read(self.meta_cache_file())
+            .ok()
+            .and_then(|b| serde_json::from_slice::<Vec<MetaEntry>>(&b).ok())
+        else {
+            return;
+        };
+        let mut cache = self.meta_cache.lock().unwrap_or_else(|e| e.into_inner());
+        cache.map = entries
+            .into_iter()
+            .take(META_CACHE_MAX)
+            .map(|e| ((e.path, e.size, e.mtime), e.meta))
+            .collect();
+    }
+
+    fn save_meta_cache(&self) {
+        let mut cache = self.meta_cache.lock().unwrap_or_else(|e| e.into_inner());
+        if !cache.dirty {
+            return;
+        }
+        let entries: Vec<MetaEntry> = cache
+            .map
+            .iter()
+            .map(|((path, size, mtime), meta)| MetaEntry {
+                path: path.clone(),
+                size: *size,
+                mtime: *mtime,
+                meta: meta.clone(),
+            })
+            .collect();
+        if let Ok(bytes) = serde_json::to_vec(&entries) {
+            if write_durable(&self.meta_cache_file(), &bytes).is_ok() {
+                cache.dirty = false;
+            }
+        }
     }
 
     /// The file to send to a friend (the original: EPUB reads everywhere).
@@ -845,6 +906,7 @@ impl Library {
             link(&mut pc, &mut books);
             kindle_side(k.clone(), books)
         });
+        self.save_meta_cache();
         Overview {
             library: self.root.clone(),
             pc,

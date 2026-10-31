@@ -130,6 +130,33 @@ test("no update, or no internet: the app starts as usual", async () => {
   });
 });
 
+test("a Kindle with many books: she's told it is detected while its list is read", async () => {
+  await withApp([everyday], async (page) => {
+    await page.evaluate(() => { window.__fake.state.overviewDelay = 3000; window.__fake.plug(); window.__fake.addKindleBook("Hugo, Victor/Les Miserables.mobi", "Les Misérables", "Hugo, Victor"); });
+    await page.waitForSelector("#k-reading:not([hidden])");
+    assert.match(await page.locator("#k-reading").innerText(), /Liseuse détectée.*première fois/s);
+    assert.equal(await page.locator("#k-off").isVisible(), false, "no longer asks to plug it in");
+    await page.waitForSelector(".k-item", { timeout: 10000 });
+    assert.equal(await page.locator("#k-reading").isVisible(), false);
+  });
+});
+
+test("'Tout cocher' on the Kindle side puts everything back on the computer in one go", async () => {
+  const seed = (f) => {
+    f.plug();
+    for (let i = 1; i <= 12; i++) f.addKindleBook(`Auteur, Un/Livre ${i}.mobi`, `Livre ${i}`, "Auteur, Un", 400_000);
+  };
+  await withApp([everyday, seed], async (page) => {
+    await page.click("#k-all-box");
+    assert.match(await page.locator("#k-bar-text").innerText(), /12 livres cochés/);
+    await page.click("#k-bar-go");
+    await page.waitForFunction(() => document.querySelectorAll(".k-item").length === 0, null, { timeout: 15000 });
+    assert.match(await toastText(page), /12 livres rangés/);
+    const st = await fakeState(page);
+    assert.equal(st.pc.length, 12, "every book is on the computer");
+  });
+});
+
 test("a full Kindle explains what to do instead of failing", async () => {
   await withApp([everyday, (f) => { f.plug(40 * 1024 * 1024); f.addPcBook("Atlas", "pdf", 30 * 1024 * 1024); }], async (page) => {
     await page.click(".book-action");
