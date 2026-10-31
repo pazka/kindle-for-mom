@@ -29,6 +29,8 @@ const el = (tag, { dataset, ...props } = {}, ...children) => {
 };
 
 const KINDLE_POLL_MS = 2000;
+/** Never keep her waiting more than this for the update check at start. */
+const UPDATE_CHECK_MS = 8000;
 const DOWNLOADS_POLL_MS = 10000;
 
 const state = {
@@ -63,6 +65,28 @@ function bigMessage(title, text, art) {
   $("bm-art").style.backgroundImage = art ? `url(${art})` : "none";
   $("bigmsg").hidden = false;
   $("bigmsg").querySelector("[data-close]").focus();
+}
+
+/**
+ * A new version (signed by Pazka) is installed right at start, before any
+ * copy can begin; the app then reopens by itself. Offline, slow or failing:
+ * the app just starts as usual. Returns true while the update runs.
+ */
+async function updateAtStart() {
+  const found = await Promise.race([
+    api.checkUpdate().catch(() => null),
+    new Promise((r) => setTimeout(() => r(null), UPDATE_CHECK_MS)),
+  ]);
+  if (!found) return false;
+  $("updating").hidden = false;
+  try {
+    await api.installUpdate();
+    return true;
+  } catch (e) {
+    console.error(e);
+    $("updating").hidden = true;
+    return false;
+  }
 }
 
 /** Run one file operation at a time; errors become a sentence. */
@@ -498,14 +522,15 @@ async function main() {
   };
   $("p-stop").onclick = () => { state.stop = true; $("p-stop").disabled = true; $("p-text").textContent = "J'arrête après ce livre…"; };
   for (const m of document.querySelectorAll(".modal")) {
-    if (m.id === "progress") continue; // can't be dismissed mid-copy
+    if (m.id === "progress" || m.id === "updating") continue; // can't be dismissed mid-copy / mid-update
     m.addEventListener("click", (e) => { if (e.target === m || e.target.closest("[data-close]")) m.hidden = true; });
   }
   document.addEventListener("keydown", (e) => {
-    if (e.key === "Escape") for (const m of document.querySelectorAll(".modal")) if (m.id !== "progress") m.hidden = true;
+    if (e.key === "Escape") for (const m of document.querySelectorAll(".modal")) if (m.id !== "progress" && m.id !== "updating") m.hidden = true;
   });
   api.onFileDrop(addPaths, (on) => { $("drop-hint").hidden = !on; });
 
+  if (await updateAtStart()) return;
   await refresh();
   if (state.overview.kindle) onKindleArrived();
   if (!state.ui.guideDone) openGuide();

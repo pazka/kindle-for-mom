@@ -8,7 +8,8 @@ French and is its own guide.
 | Part | Where | State |
 |---|---|---|
 | Windows app (Tauri 2) | [`app/`](app/) | v0.1 offline core |
-| Server `livres.hosh.it` (updates, admin, OPDS catalogue) | `server/` | planned (v0.2, v0.3) |
+| Signed updates (GitHub Releases, see `docs/RELEASING.md`) | `.github/workflows/app.yml` | v0.2 |
+| OPDS catalogue on `livres.hosh.it` | separate repo `pazka/livres` | planned (v0.3) |
 
 Start here:
 

@@ -20,6 +20,7 @@
       seen: new Set(),
       ui: {},
       trash: new Map(),
+      update: null, // version offered by check_update
     },
   };
 
@@ -180,6 +181,8 @@
     get_ui_state: () => fake.state.ui,
     set_ui_state: ({ ui }) => { fake.state.ui = ui; return null; },
     open_library: () => null,
+    check_update: () => (fake.state.update ? { current: "0.2.0", version: fake.state.update } : null),
+    install_update: () => { fake.installed = fake.state.update; return new Promise(() => {}); }, // the real app closes here
     sort_author: ({ name }) => (name.includes(",") ? name : name.replace(/^(.*) (\S+)$/, "$2, $1")),
     share_book: ({ id }) => { if (!fake.state.pc.some((b) => b.id === id)) throw err("missing", "Ce livre n'est plus là."); fake.shared = id; return null; },
   };
@@ -188,7 +191,7 @@
     fake.calls.push(cmd);
     await new Promise((r) => setTimeout(r, 5));
     if (!commands[cmd]) throw err("unknown", `commande inconnue ${cmd}`);
-    const out = commands[cmd](args || {}, opts);
+    const out = await commands[cmd](args || {}, opts);
     return out === undefined ? null : structuredClone(out);
   }
 

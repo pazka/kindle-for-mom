@@ -55,9 +55,9 @@ Rules:
 - **SemVer.** `x.y.z` in `Cargo.toml`, `tauri.conf.json` and `package.json`, checked by `scripts/check-version.mjs` (also against the tag).
 - **CHANGELOG.md** entry for every user-visible change, written so you could read it to Mom.
 - **Tag `vX.Y.Z` on `main`** → CI → GitHub release with the installer and SHA-256 sums.
-- From v0.2 (updater): updates are **signed** (Ed25519, key only in GitHub secrets and your password manager). Two channels:
-  1. `test`: your own PC gets the version first.
-  2. `stable`: Mom's PC, promoted from the admin only after the test channel ran it. Rollback = point `stable` back to the previous version.
+- From v0.2 (updater, ADR-0007): updates are **signed** (minisign/Ed25519, key only in GitHub secrets and your password manager) and the app refuses anything else. Two channels, served by GitHub Releases (procedure: `docs/RELEASING.md`):
+  1. `test`: a new tag publishes a pre-release; you install it on your own PC first.
+  2. `stable`: Mom's app follows the release marked Latest; you promote a release there only after the test channel ran it. Rollback = mark the previous release Latest.
 - Data-layout changes (anything under `Mes livres/.liseuse/`) need a migration that runs at start, a test with a library in the old layout, and must keep working if the update is rolled back.
 - Never ship on a Friday evening before her trip: the updater applies on next start, so a bad version only affects her after a restart, and a rollback fixes it on the following start.
 
@@ -69,7 +69,7 @@ Rules:
 
 ## 6. Dependencies and supply chain
 
-- New third-party dependency only with the owner's yes. Today: `tauri`, `tauri-build`, `serde`, `serde_json`, `windows-sys` (Rust); `@tauri-apps/cli`, `playwright` (dev only, JS). The converter has none.
+- New third-party dependency only with the owner's yes. Today: `tauri`, `tauri-build`, `tauri-plugin-updater`, `serde`, `serde_json`, `windows-sys` (Rust); `@tauri-apps/cli`, `playwright` (dev only, JS). The converter has none.
 - Libraries are kept up to date for security: Dependabot (`.github/dependabot.yml`) proposes updates 7 days after a release; minor and patch updates are merged automatically once every check above is green on that exact commit (`dependabot-merge.yml`, policy in `.github/scripts/dependabot-merge.sh`, which tests itself on each run); major updates get the `needs-review` label and a review first. After each merge the checks run again on `main`.
 - Exact versions, lockfiles committed (`Cargo.lock`, `package-lock.json`), `--locked` / `npm ci --ignore-scripts` everywhere, chosen releases at least 7 days old.
 - No secrets in the repo (it is public). No telemetry without the owner's and Mom's agreement.
