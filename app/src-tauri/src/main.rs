@@ -4,9 +4,12 @@
 //! Thin Tauri shell: every command forwards to `liseuse-core`.
 //! Binary payloads (books) travel raw over IPC, never as JSON arrays.
 
+mod catalog;
+
+use liseuse_core::catalog::Page;
 use liseuse_core::formats::Format;
 use liseuse_core::kindle::{self, Kindle};
-use liseuse_core::library::{DownloadCandidate, Library, OpError, Overview};
+use liseuse_core::library::{display_name, DownloadCandidate, Library, OpError, Overview};
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 use tauri::ipc::{InvokeBody, Request, Response};
@@ -316,6 +319,52 @@ async fn install_update(handle: AppHandle, app: State<'_, App>) -> Res<()> {
     handle.restart();
 }
 
+/// "Trouver un livre": first page of the free catalogue, a search, or a
+/// next/previous/suggestion link of it.
+#[tauri::command]
+async fn catalog_page(url: Option<String>, query: Option<String>) -> Res<Page> {
+    catalog::page(url, query).await
+}
+
+/// Download a free book from the catalogue into her library. Returns its id
+/// (an EPUB is then converted for the Kindle like any other).
+#[tauri::command]
+async fn catalog_download(
+    app: State<'_, App>,
+    url: String,
+    format: String,
+    title: String,
+    author: Option<String>,
+) -> Res<String> {
+    let format = Format::from_ext(&format)
+        .filter(|f| matches!(f, Format::Epub | Format::Mobi | Format::Pdf))
+        .ok_or_else(|| {
+            OpError::new(
+                "format",
+                "Ce fichier n'est pas un livre que la liseuse peut lire.",
+            )
+        })?;
+    let stamp = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_nanos())
+        .unwrap_or_default();
+    let tmp = std::env::temp_dir().join(format!("ma-liseuse-{stamp}.{}", format.ext()));
+    let res = match catalog::download(&url, format, &tmp, MAX_BOOK).await {
+        Ok(()) => app
+            .lib
+            .add_path(&tmp, Some(&display_name(&title, author.as_deref()))),
+        Err(e) => Err(e),
+    };
+    let _ = std::fs::remove_file(&tmp);
+    res
+}
+
+/// "Demander un livre" when the catalogue doesn't have it.
+#[tauri::command]
+async fn catalog_request(title: String, author: String, message: String) -> Res<()> {
+    catalog::request(&title, &author, &message).await
+}
+
 #[tauri::command]
 async fn open_library(app: State<'_, App>) -> Res<()> {
     let root = app.lib.root().to_path_buf();
@@ -331,6 +380,8 @@ async fn open_library(app: State<'_, App>) -> Res<()> {
 }
 
 fn main() {
+    // HTTPS for the catalogue and the updater (same crypto as the updater).
+    let _ = rustls::crypto::ring::default_provider().install_default();
     tauri::Builder::default()
         .plugin(tauri_plugin_updater::Builder::new().build())
         .setup(|app| {
@@ -375,6 +426,9 @@ fn main() {
             share_book,
             check_update,
             install_update,
+            catalog_page,
+            catalog_download,
+            catalog_request,
         ])
         .run(tauri::generate_context!())
         .expect("Ma liseuse n'a pas pu démarrer");

@@ -33,6 +33,11 @@ export const api = {
   /** {current, version} when another signed version should run here, else null. */
   checkUpdate: () => invoke("check_update"),
   installUpdate: () => invoke("install_update"),
+  /** « Trouver un livre »: {} = first page, {query} = search, {url} = a link of a page. */
+  catalogPage: ({ url = null, query = null } = {}) => invoke("catalog_page", { url, query }),
+  /** Download a free book into the library; returns its id. */
+  catalogDownload: (url, format, title, author) => invoke("catalog_download", { url, format, title, author: author ?? null }),
+  catalogRequest: (title, author, message) => invoke("catalog_request", { title, author, message }),
   /** Files dropped from File Explorer: cb(paths), plus hover in/out. */
   onFileDrop(cb, hover) {
     const ev = window.__TAURI__.event;

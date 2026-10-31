@@ -12,6 +12,7 @@
 
 import { api } from "./js/api.js";
 import { Converter } from "./js/converter.js";
+import { setupFind } from "./js/find.js";
 import { setupGuide, setupTips } from "./js/guide.js";
 import {
   LIGHT_LABEL, SUPPORTED, canGoOnKindle, coverColor, errorText, filterBooks, filterKindle, formatSize, gaugeText, plural,
@@ -506,6 +507,7 @@ async function main() {
   const openGuide = setupGuide(document, { onClose: () => { if (!state.ui.guideDone) { state.ui.guideDone = true; saveUi(); } } });
 
   $("btn-help").onclick = openGuide;
+  $("btn-find").onclick = setupFind(document, { api, run, toast, el });
   $("btn-add").onclick = () => $("file-input").click();
   $("file-input").onchange = async (e) => { const files = [...e.target.files]; e.target.value = ""; await addFiles(files); };
   $("btn-folder").onclick = () => api.openLibrary().catch((e) => toast(errorText(e), { kind: "error" }));

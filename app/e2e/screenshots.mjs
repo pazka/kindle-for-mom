@@ -36,6 +36,17 @@ for (const [name, seed] of shots) {
   if (errors.length) console.error(name, errors);
   await context.close();
 }
+// finding a free book
+{
+  const { page, context } = await openApp(browser, url, library);
+  await page.click("#btn-find");
+  await page.click("#f-suggest >> text=Victor Hugo");
+  await page.waitForSelector(".f-book");
+  await page.screenshot({ path: `${out}8-trouver-un-livre.png` });
+  await page.click("#f-ask-open");
+  await page.screenshot({ path: `${out}9-demander-un-livre.png` });
+  await context.close();
+}
 // ticking books for a trip, on a laptop screen
 {
   const { page, context } = await openApp(browser, url, [library, (f) => {

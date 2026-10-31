@@ -14,3 +14,7 @@ tauri = { version = "=2.12.5", features = [] }
 tauri-plugin-updater = "=2.14.0"
 serde = { version = "=1.0.229", features = ["derive"] }
 serde_json = "=1.0.154"
+# Already shipped by tauri-plugin-updater (same versions, same features):
+# used directly for the free catalogue on livres.hosh.it (ADR-0008).
+reqwest = { version = "=0.13.5", default-features = false, features = ["rustls-no-provider"] }
+rustls = { version = "=0.23.46", default-features = false, features = ["ring"] }
