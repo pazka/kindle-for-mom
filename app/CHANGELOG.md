@@ -2,7 +2,7 @@
 
 All notable changes to Ma liseuse. Format: [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/), versions: [SemVer](https://semver.org/).
 
-## [Unreleased]
+## [0.3.0] - 2026-10-31
 
 ### Added
 - "🔎 Trouver un livre": search the free, legal French books of livres.hosh.it, add one to her books in one click (EPUBs are converted for the Kindle as usual), and "Demander ce livre à Alexandre" when it isn't there.

@@ -54,5 +54,5 @@ from that sort, the key that recognises the same book on both sides) are in
 ## Coming next
 
 - v0.2 (done): signed updates from GitHub Releases, test/stable channels and rollback through the release marked Latest (ADR-0007, `docs/RELEASING.md`). An admin on livres.hosh.it can later replace the endpoint.
-- v0.3: "Trouver un livre" window on the OPDS 2.0 catalogue of livres.hosh.it, with "Demander un livre" (ADR-0008). In progress: merged, released once the server is online.
+- v0.3: "Trouver un livre" window on the OPDS 2.0 catalogue of livres.hosh.it, with "Demander un livre" (ADR-0008). Released in 0.3.0.
 - Windows 10 support pass (same build; test matrix on a Windows 10 VM).
