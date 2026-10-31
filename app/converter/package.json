@@ -1,0 +1,10 @@
+{
+  "name": "kindle-converter",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "EPUB 2/3 to MOBI 6 for old Kindles (D01100 / Kindle 4). No dependencies.",
+  "exports": { ".": "./src/convert.js" },
+  "engines": { "node": ">=22" },
+  "scripts": { "test": "node --test test/*.test.js" }
+}
