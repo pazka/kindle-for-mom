@@ -1,0 +1,23 @@
+{
+  "name": "ma-liseuse",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "build:ui": "node scripts/build-ui.mjs",
+    "test": "npm run test:converter && npm run test:ui",
+    "test:converter": "node --test converter/test/*.test.js",
+    "test:ui": "node --test ui/test/*.test.js",
+    "e2e": "npm run build:ui && node --test --test-concurrency=1 e2e/*.test.mjs",
+    "screenshots": "npm run build:ui && node e2e/screenshots.mjs",
+    "check:version": "node scripts/check-version.mjs",
+    "tauri": "tauri"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "2.12.3",
+    "playwright": "1.63.0"
+  }
+}

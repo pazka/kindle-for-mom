@@ -1,0 +1,134 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Ma liseuse</title>
+  <link rel="stylesheet" href="style.css">
+  <script type="module" src="app.js"></script>
+</head>
+<body>
+  <header class="topbar">
+    <h1><span class="logo" aria-hidden="true"></span>Ma liseuse</h1>
+    <nav>
+      <button id="btn-add" class="btn btn-wood">＋ Ajouter un livre</button>
+      <button id="btn-folder" class="btn btn-wood">📁 Mes livres</button>
+      <button id="btn-help" class="btn btn-help" title="Aide">? Aide</button>
+    </nav>
+    <input id="file-input" type="file" multiple accept=".epub,.mobi,.azw,.azw3,.prc,.pdf,.txt" hidden>
+  </header>
+
+  <div id="offers" class="offers" aria-live="polite"></div>
+
+  <main class="desk">
+    <!-- ============ the computer ============ -->
+    <section class="computer" aria-label="Mon ordinateur">
+      <div class="monitor">
+        <div class="monitor-screen">
+          <div class="screen-head">
+            <h2>Mon ordinateur</h2>
+            <span id="pc-count" class="muted"></span>
+          </div>
+          <div id="pc-empty" class="empty" hidden>
+            <div class="empty-books" aria-hidden="true"></div>
+            <p><b>Votre bibliothèque est vide.</b></p>
+            <p>Faites glisser un livre ici,<br>ou cliquez sur <b>« ＋ Ajouter un livre »</b>.</p>
+          </div>
+          <ul id="pc-list" class="shelf"></ul>
+          <div id="drop-hint" class="drop-hint" hidden>Lâchez le livre ici</div>
+        </div>
+        <div class="monitor-chin"><span class="power-led"></span></div>
+      </div>
+      <div class="monitor-neck"></div>
+      <div class="monitor-foot"></div>
+    </section>
+
+    <!-- ============ between the two ============ -->
+    <section class="middle" aria-label="Actions">
+      <div id="cable" class="cable" aria-hidden="true"></div>
+      <div id="trip" class="trip" hidden>
+        <p class="trip-title">Préparer un voyage</p>
+        <p id="trip-info" class="trip-info"></p>
+        <button id="trip-go" class="btn btn-big btn-green">Mettre ces livres<br>dans la liseuse →</button>
+        <button id="trip-cancel" class="btn btn-link">Annuler</button>
+      </div>
+      <button id="trip-start" class="btn btn-wood btn-trip" hidden>🧳 Préparer un voyage</button>
+    </section>
+
+    <!-- ============ the Kindle ============ -->
+    <section class="kindle-wrap" aria-label="Ma liseuse">
+      <div id="kindle" class="kindle off">
+        <div class="kindle-brand">kindle</div>
+        <div class="kindle-screen">
+          <div id="k-off" class="k-off">
+            <div class="plug-anim" aria-hidden="true"><span class="plug"></span></div>
+            <p><b>Branchez votre liseuse</b><br>avec son câble sur l'ordinateur.</p>
+            <p class="small">Elle sera reconnue toute seule.</p>
+          </div>
+          <div id="k-on" class="k-on" hidden>
+            <div class="k-head"><span>Ma liseuse</span><span id="k-count"></span></div>
+            <div id="k-empty" class="k-empty" hidden>Aucun livre sur la liseuse pour l'instant.</div>
+            <ul id="k-list" class="k-list"></ul>
+          </div>
+        </div>
+        <div class="kindle-keys" aria-hidden="true">
+          <span class="key k-back"></span><span class="key k-kbd"></span>
+          <span class="pad"><span class="pad-center"></span></span>
+          <span class="key k-menu"></span><span class="key k-home"></span>
+        </div>
+      </div>
+      <div id="k-status" class="k-status">
+        <div id="k-detected" class="k-detected" hidden>✓ Liseuse détectée</div>
+        <div id="gauge" class="gauge" hidden>
+          <div class="gauge-shelf"><div id="gauge-fill" class="gauge-fill"></div></div>
+          <p id="gauge-text" class="gauge-text"></p>
+        </div>
+        <button id="btn-eject" class="btn btn-big btn-blue" hidden>J'ai fini,<br>je débranche</button>
+      </div>
+    </section>
+  </main>
+
+  <!-- book details -->
+  <div id="details" class="modal" hidden>
+    <div class="card" role="dialog" aria-modal="true" aria-labelledby="d-title">
+      <button class="close" data-close>✕</button>
+      <div class="d-cover" id="d-cover"></div>
+      <div class="d-body">
+        <h3 id="d-title"></h3>
+        <p id="d-author" class="d-author"></p>
+        <p id="d-light" class="d-light"></p>
+        <p id="d-size" class="muted"></p>
+        <div id="d-actions" class="d-actions"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- guide -->
+  <div id="guide" class="modal" hidden>
+    <div class="card guide-card" role="dialog" aria-modal="true" aria-labelledby="g-title">
+      <button class="close" data-close>✕</button>
+      <div id="g-art" class="g-art" aria-hidden="true"></div>
+      <h3 id="g-title"></h3>
+      <p id="g-text" class="g-text"></p>
+      <div class="g-nav">
+        <button id="g-prev" class="btn btn-link">← Précédent</button>
+        <span id="g-dots" class="g-dots"></span>
+        <button id="g-next" class="btn btn-big btn-green">Suivant →</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- big message (unplug, etc.) -->
+  <div id="bigmsg" class="modal" hidden>
+    <div class="card big-card">
+      <div id="bm-art" class="bm-art" aria-hidden="true"></div>
+      <h3 id="bm-title"></h3>
+      <p id="bm-text"></p>
+      <button class="btn btn-big btn-green" data-close>D'accord</button>
+    </div>
+  </div>
+
+  <div id="tip" class="tip" hidden><p id="tip-text"></p><button id="tip-ok" class="btn btn-small">J'ai compris</button></div>
+  <div id="toasts" class="toasts" aria-live="polite"></div>
+</body>
+</html>
