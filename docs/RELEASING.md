@@ -4,11 +4,12 @@
    (`[workspace.package]`), `app/src-tauri/tauri.conf.json` and
    `app/package.json` (`npm run check:version` checks them), and write the
    `CHANGELOG.md` entry.
-2. Tag and push: `git tag vX.Y.Z && git push origin vX.Y.Z`.
-3. CI runs every check, builds the installer **signed** with the updater key,
-   and publishes a **pre-release** with the installer, its `.sig`,
-   `latest.json` and `SHA256SUMS.txt`. A tag build fails if the signing
-   secrets are missing.
+2. Merge that change into `main` (a PR, like any change). Nothing else to do:
+   when `main` carries a version without a tag, CI runs every check, builds
+   the installer **signed** with the updater key, creates the tag `vX.Y.Z` on
+   that commit and publishes a **pre-release** with the installer, its
+   `.sig`, `latest.json` and `SHA256SUMS.txt`. Pushing a tag `vX.Y.Z` by hand
+   does the same. A release build fails if the signing secrets are missing.
 4. **Test channel:** install the pre-release's installer on your own PC and
    use it.
 5. **Promote to Mom:** on GitHub, edit the release, untick "Set as a

@@ -54,9 +54,9 @@ Rules:
 
 - **SemVer.** `x.y.z` in `Cargo.toml`, `tauri.conf.json` and `package.json`, checked by `scripts/check-version.mjs` (also against the tag).
 - **CHANGELOG.md** entry for every user-visible change, written so you could read it to Mom.
-- **Tag `vX.Y.Z` on `main`** → CI → GitHub release with the installer and SHA-256 sums.
+- **A new version merged into `main`** (or a pushed tag `vX.Y.Z`) → CI → signed pre-release with the installer and SHA-256 sums; CI creates the tag.
 - From v0.2 (updater, ADR-0007): updates are **signed** (minisign/Ed25519, key only in GitHub secrets and your password manager) and the app refuses anything else. Two channels, served by GitHub Releases (procedure: `docs/RELEASING.md`):
-  1. `test`: a new tag publishes a pre-release; you install it on your own PC first.
+  1. `test`: merging a new version into `main` (or pushing its tag) publishes a pre-release; you install it on your own PC first.
   2. `stable`: Mom's app follows the release marked Latest; you promote a release there only after the test channel ran it. Rollback = mark the previous release Latest.
 - Data-layout changes (anything under `Mes livres/.liseuse/`) need a migration that runs at start, a test with a library in the old layout, and must keep working if the update is rolled back.
 - Never ship on a Friday evening before her trip: the updater applies on next start, so a bad version only affects her after a restart, and a rollback fixes it on the following start.
