@@ -2,6 +2,11 @@
 
 All notable changes to Ma liseuse. Format: [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/), versions: [SemVer](https://semver.org/).
 
+## [0.3.1] - 2026-11-01
+
+### Changed
+- Updates now reach her app on their own: every tested version is published as the one her app installs at its next start (no manual step). Same app as 0.3.0 otherwise.
+
 ## [0.3.0] - 2026-10-31
 
 ### Added
