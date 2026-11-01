@@ -17,9 +17,11 @@ needed for a first, safe version.
   password manager and in the repository secrets `TAURI_SIGNING_PRIVATE_KEY`
   and `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`. The app refuses any file not
   signed with that key.
-- **Channels without a server:** a new version merged into `main` (or a tag `vX.Y.Z`) publishes a *pre-release*,
-  which is the test channel (Pazka installs it by hand on his own PC). Marking
-  it **Latest** in GitHub promotes it to Mom (stable).
+- **One channel, automatic** (amended 2026-11-01, owner's decision): a new
+  version merged into `main` (or a tag `vX.Y.Z`) is published as the
+  **Latest** release once every check is green, so Mom gets it at her next
+  start with no manual step. (Until 0.3.0 a new version was a pre-release
+  that Pazka promoted by hand.)
 - **Rollback:** mark the previous release Latest. The app installs any version
   different from its own, older ones included, so her next start goes back.
 - The update installs at start, before any copy can begin, with a message
