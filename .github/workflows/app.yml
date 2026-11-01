@@ -1,8 +1,10 @@
 # Windows app: every push and PR runs the whole safety net.
 # Releasing (docs/RELEASING.md): when main carries a version that has no
 # tag yet (a merged version bump), or a tag vX.Y.Z is pushed, the installer
-# is built signed and published as a pre-release, only if every check below
-# is green (the release job `needs` all of them).
+# is built signed and published as the Latest release (Mom's app installs it
+# at its next start), only if every check below is green (the release job
+# `needs` all of them; the live catalogue check is informative only, so a
+# server outage never blocks a fix).
 name: app
 
 on:
@@ -168,8 +170,8 @@ jobs:
           cd ..
           node app/scripts/updater-manifest.mjs dist-release "$TAG" "${GITHUB_REPOSITORY}"
           (cd dist-release && sha256sum *.exe > SHA256SUMS.txt)
-          # A new release is the "test" channel (pre-release): Mom's app only
-          # follows the release marked "Latest". Promote it there by hand once
-          # it ran on your PC; roll back by marking the previous one Latest.
+          # One channel (owner's decision, 2026-11-01): a new release is
+          # marked Latest at once, so Mom's app installs it at its next start.
+          # Roll back by marking the previous release Latest (docs/RELEASING.md).
           # The tag is created here, on the commit that passed every check.
-          gh release create "$TAG" dist-release/* --prerelease --target "$GITHUB_SHA" --title "Ma liseuse $TAG" --notes-file app/CHANGELOG.md
+          gh release create "$TAG" dist-release/* --latest --target "$GITHUB_SHA" --title "Ma liseuse $TAG" --notes-file app/CHANGELOG.md
