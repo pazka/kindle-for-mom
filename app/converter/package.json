@@ -5,6 +5,6 @@
   "type": "module",
   "description": "EPUB 2/3 to MOBI 6 for old Kindles (D01100 / Kindle 4). No dependencies.",
   "exports": { ".": "./src/convert.js" },
-  "engines": { "node": ">=22" },
+  "engines": { "node": ">=26" },
   "scripts": { "test": "node --test test/*.test.js" }
 }
