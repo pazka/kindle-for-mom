@@ -165,27 +165,56 @@ pub async fn request(title: &str, author: &str, message: &str) -> Res<()> {
 mod live {
     use super::*;
 
+    /// "https://www.gutenberg.org/ebooks/1.epub" -> "www.gutenberg.org"
+    fn host_of(url: &str) -> &str {
+        let rest = url.split_once("://").map_or(url, |(_, r)| r);
+        rest.split(['/', '?', '#']).next().unwrap_or(rest)
+    }
+
     #[test]
     #[ignore = "needs internet: cargo test -p liseuse -- --ignored"]
     fn livres_hosh_it_answers_like_the_contract() {
         let _ = rustls::crypto::ring::default_provider().install_default();
+        assert_eq!(
+            host_of("https://www.gutenberg.org/ebooks/1.epub3.images"),
+            "www.gutenberg.org"
+        );
+        assert_eq!(host_of("https://a.example?x=1"), "a.example");
         tauri::async_runtime::block_on(async {
             let home = page(None, None).await.expect("first page");
             assert!(!home.suggestions.is_empty(), "author ideas");
             let found = page(None, Some("hugo".into())).await.expect("search");
             assert!(!found.books.is_empty(), "results for hugo");
-            let book = found
-                .books
-                .iter()
-                .find(|b| b.download.is_some())
-                .expect("a downloadable book");
-            let d = book.download.as_ref().unwrap();
-            let to = std::env::temp_dir().join(format!("live-book.{}", d.format.ext()));
-            download(&d.url, d.format, &to, 300 * 1024 * 1024)
-                .await
-                .expect("download");
-            assert!(std::fs::metadata(&to).unwrap().len() > 1000);
-            let _ = std::fs::remove_file(&to);
+            // One book per source host: an upstream library that is down (Project
+            // Gutenberg's maintenance, hosh-management#31) must not hide that
+            // livres works; the test fails only if no host gives a book.
+            let mut tried: Vec<&str> = Vec::new();
+            let mut worked = 0;
+            for d in found.books.iter().filter_map(|b| b.download.as_ref()) {
+                let host = host_of(&d.url);
+                if tried.contains(&host) {
+                    continue;
+                }
+                tried.push(host);
+                let to = std::env::temp_dir().join(format!(
+                    "live-book-{}.{}",
+                    tried.len(),
+                    d.format.ext()
+                ));
+                let got = download(&d.url, d.format, &to, 300 * 1024 * 1024).await;
+                let size = std::fs::metadata(&to).map(|m| m.len()).unwrap_or(0);
+                let _ = std::fs::remove_file(&to);
+                match got {
+                    Ok(_) if size > 1000 => {
+                        eprintln!("live: {host}: ok ({size} bytes)");
+                        worked += 1;
+                    }
+                    Ok(_) => eprintln!("live: {host}: FAILED (only {size} bytes)"),
+                    Err(e) => eprintln!("live: {host}: FAILED ({e:?})"),
+                }
+            }
+            assert!(!tried.is_empty(), "a downloadable book");
+            assert!(worked > 0, "no source host gave a book: {tried:?}");
             if let Some(next) = &found.next {
                 page(Some(next.clone()), None).await.expect("next page");
             }
