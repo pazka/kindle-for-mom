@@ -6,7 +6,7 @@ edition.workspace = true
 license.workspace = true
 
 [build-dependencies]
-tauri-build = { version = "=2.7.4", features = [] }
+tauri-build = { version = "=2.7.5", features = [] }
 
 [dependencies]
 liseuse-core = { path = "../core" }
